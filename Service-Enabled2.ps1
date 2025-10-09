@@ -1,32 +1,32 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# Services to check
+# servicess
 $servicesToCheck = @(
     "SysMain","PcaSvc","DPS","EventLog","Schedule","Bam","wsearch",
     "Appinfo","SSDPSRV","CDPSvc","DcomLaunch","PlugPlay"
 )
 
-# Create Form
+# buildin
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Service Checker"
 $form.Size = New-Object System.Drawing.Size(500,400)
 $form.StartPosition = "CenterScreen"
 
-# ListBox for services
+# building2
 $listBox = New-Object System.Windows.Forms.ListBox
 $listBox.Size = New-Object System.Drawing.Size(460,280)
 $listBox.Location = New-Object System.Drawing.Point(10,10)
 $form.Controls.Add($listBox)
 
-# Button to enable selected services
+# button to enable
 $buttonEnable = New-Object System.Windows.Forms.Button
 $buttonEnable.Text = "Enable Selected"
 $buttonEnable.Size = New-Object System.Drawing.Size(460,30)
 $buttonEnable.Location = New-Object System.Drawing.Point(10,300)
 $form.Controls.Add($buttonEnable)
 
-# Populate list with service statuses
+# list serv
 function Refresh-List {
     $listBox.Items.Clear()
     foreach ($serviceName in $servicesToCheck) {
@@ -41,7 +41,7 @@ function Refresh-List {
     }
 }
 
-# Enable/start selected services
+# start services
 $buttonEnable.Add_Click({
     foreach ($item in $listBox.SelectedItems) {
         $serviceName = ($item -split " -")[0]
@@ -60,8 +60,8 @@ $buttonEnable.Add_Click({
     Refresh-List
 })
 
-# Initial population
+
 Refresh-List
 
-# Show form
+
 [void]$form.ShowDialog()
