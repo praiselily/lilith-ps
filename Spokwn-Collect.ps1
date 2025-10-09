@@ -21,8 +21,8 @@ $Tools = @(
     @{ Name="BAM Parser"; Url="https://github.com/spokwn/BAM-parser/releases/download/v1.2.9/BAMParser.exe"; File="BAMParser.exe" },
     @{ Name="Paths Parser"; Url="https://github.com/spokwn/PathsParser/releases/download/v1.2/PathsParser.exe"; File="PathsParser.exe" },
     @{ Name="JournalTrace"; Url="https://github.com/spokwn/JournalTrace/releases/download/1.2/JournalTrace.exe"; File="JournalTrace.exe" },
-    @{ Name="Tool"; Url="https://github.com/spokwn/Tool/releases/latest/download/Tool.exe"; File="Tool.exe" },
-    @{ Name="PcaSvc Executed"; Url="https://github.com/spokwn/pcasvc-executed/releases/latest/download/PcaSvc-Executed.exe"; File="PcaSvc-Executed.exe" }
+    @{ Name="Tool"; Url="https://github.com/spokwn/Tool/releases/download/v1.1.3/espouken.exe"; File="espouken.exe" },
+    @{ Name="PcaSvc Executed"; Url="https://github.com/spokwn/pcasvc-executed/releases/download/v0.8.7/PcaSvcExecuted.exe"; File="PcaSvcExecuted.exe" }
 )
 
 # --- Parallel downloads ---
