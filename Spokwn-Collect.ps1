@@ -7,7 +7,7 @@
         && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/lilithyo/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
 #>
 
-# --- Setup ---
+# setup
 $BaseDir = "C:\Screenshare"
 $LogFile = "$BaseDir\download-log.txt"
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
@@ -16,7 +16,7 @@ $ProgressPreference = 'SilentlyContinue'
 Write-Host "=== Spokwn Tool Collector ==="
 Write-Host "All tools will be saved in: $BaseDir`n"
 
-# --- Tool list ---
+# listin all da tools
 $Tools = @(
     @{ Name="Kernel Live Dump Analyzer Parser"; Url="https://github.com/spokwn/KernelLiveDumpTool/releases/download/v1.1/KernelLiveDumpTool.exe"; File="KernelLiveDumpTool.exe" },
     @{ Name="BAM Parser"; Url="https://github.com/spokwn/BAM-parser/releases/download/v1.2.9/BAMParser.exe"; File="BAMParser.exe" },
@@ -26,7 +26,7 @@ $Tools = @(
     @{ Name="PcaSvc Executed"; Url="https://github.com/spokwn/pcasvc-executed/releases/download/v0.8.7/PcaSvcExecuted.exe"; File="PcaSvcExecuted.exe" }
 )
 
-# --- Download helper ---
+# download
 function Download-Tool {
     param($Name, $Url, $OutPath, $LogPath)
 
@@ -47,7 +47,7 @@ function Download-Tool {
     }
 }
 
-# --- Parallel downloads (Windows-safe) ---
+# parallel
 # Jobs in PS5.1 lose TLS settings, so re-set inside each job
 Write-Host "`nStarting downloads in parallel..."
 $jobs = @()
@@ -76,13 +76,13 @@ foreach ($tool in $Tools) {
     } -ArgumentList $tool.Name, $tool.Url, $out, $LogFile
 }
 
-# Wait for all jobs and collect output
+
 $jobs | Wait-Job | ForEach-Object {
     Receive-Job $_ -ErrorAction SilentlyContinue
     Remove-Job $_
 }
 
-# --- Summary ---
+# end
 if (Select-String -Path $LogFile -Pattern "FAILED" -Quiet) {
     Write-Host "`n⚠️  Some downloads failed. Check log for details:" -ForegroundColor Yellow
 } else {
