@@ -2,8 +2,8 @@
     Spokwn Tool Collector
     Downloads all Spokwn DFIR utilities into C:\Screenshare
 
-    Run via CMD or PowerShell:
-    powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/<YOUR-USER>/<YOUR-REPO>/main/spokwn-collector.ps1 | iex"
+    Run via CMD:
+    powershell Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/lilithyo/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
 #>
 
 # --- Setup ---
@@ -25,35 +25,48 @@ $Tools = @(
     @{ Name="PcaSvc Executed"; Url="https://github.com/spokwn/pcasvc-executed/releases/latest/download/PcaSvc-Executed.exe"; File="PcaSvc-Executed.exe" }
 )
 
-# --- Download function ---
-function Download-Tool {
-    param($Name, $Url, $OutPath)
-    try {
-        Write-Host "`n[+] Downloading $Name..."
-        $start = Get-Date
-        Invoke-WebRequest -Uri $Url -OutFile $OutPath -UseBasicParsing -ErrorAction Stop
-        $elapsed = [math]::Round((New-TimeSpan $start (Get-Date)).TotalSeconds, 1)
-        Add-Content -Path $LogFile -Value "$(Get-Date -Format 'u') - Downloaded: $Name ($elapsed s)"
-        Write-Host "    -> Saved to $OutPath"
-    }
-    catch {
-        Write-Warning "Failed to download $Name : $($_.Exception.Message)"
-        Add-Content -Path $LogFile -Value "$(Get-Date -Format 'u') - FAILED: $Name ($Url)"
-    }
-}
-
 # --- Parallel downloads ---
 Write-Host "`nStarting downloads in parallel..."
 $jobs = @()
+
 foreach ($tool in $Tools) {
     $out = Join-Path $BaseDir $tool.File
-    $jobs += Start-Job -ScriptBlock ${function:Download-Tool} -ArgumentList $tool.Name, $tool.Url, $out
+    $jobs += Start-Job -ScriptBlock {
+        param($Name, $Url, $OutPath, $LogPath)
+
+        function Download-Tool {
+            param($Name, $Url, $OutPath, $LogPath)
+            try {
+                Write-Host "`n[+] Downloading $Name..."
+                $start = Get-Date
+                Invoke-WebRequest -Uri $Url -OutFile $OutPath -ErrorAction Stop
+                $elapsed = [math]::Round((New-TimeSpan $start (Get-Date)).TotalSeconds, 1)
+                Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - Downloaded: $Name ($elapsed s)"
+                Write-Host "    -> Saved to $OutPath"
+            }
+            catch {
+                Write-Warning "Failed to download $Name : $($_.Exception.Message)"
+                Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - FAILED: $Name ($Url)"
+            }
+        }
+
+        Download-Tool -Name $Name -Url $Url -OutPath $OutPath -LogPath $LogPath
+
+    } -ArgumentList $tool.Name, $tool.Url, $out, $LogFile
 }
 
-Wait-Job -Job $jobs | Out-Null
-Receive-Job -Job $jobs | Out-Null
-Remove-Job -Job $jobs
+# Wait for all jobs and clean up
+$jobs | Wait-Job | ForEach-Object {
+    Receive-Job $_ -ErrorAction SilentlyContinue
+    Remove-Job $_
+}
 
-Write-Host "`n✅ All Spokwn tools downloaded successfully."
+# --- Summary ---
+if (Select-String -Path $LogFile -Pattern "FAILED" -Quiet) {
+    Write-Host "`n⚠️ Some downloads failed. Check log for details:" -ForegroundColor Yellow
+} else {
+    Write-Host "`n✅ All Spokwn tools downloaded successfully." -ForegroundColor Green
+}
+
 Write-Host "Location: $BaseDir"
 Write-Host "Log: $LogFile"
