@@ -1,9 +1,9 @@
 # ===============================================
-# LILITH SERVICES - FINAL VERSION
+# LILITH SERVICES 
 # ===============================================
 
 # ===============================================
-# BRACKET 1: Service Status
+# Services
 # ===============================================
 Write-Host "=== Service Status ==="
 
@@ -19,9 +19,9 @@ foreach ($svcName in $services) {
     }
 }
 
-# ===============================================
-# BRACKET 2: Registry Settings Check
-# ===============================================
+
+# reg keys
+
 Write-Host "`n=== Registry Settings ==="
 
 $settings = @(
@@ -41,12 +41,12 @@ foreach ($s in $settings) {
     }
 }
 
-# ===============================================
-# BRACKET 3: Event Log Checks
-# ===============================================
+
+# event logs
+
 Write-Host "`n=== Event Log Checks ==="
 
-# USN Journal cleared? (Event ID 3079 in Application log)
+
 $usnClear = Get-WinEvent -FilterHashtable @{LogName="Application"; Id=3079} -MaxEvents 1 -ErrorAction SilentlyContinue
 if ($usnClear) {
     Write-Host "USN Journal Cleared: Yes ($($usnClear.TimeCreated))" -ForegroundColor Yellow
@@ -54,7 +54,7 @@ if ($usnClear) {
     Write-Host "USN Journal Cleared: No" -ForegroundColor Green
 }
 
-# Event Logs cleared? (Event ID 1102 in Security log)
+
 $eventLogClear = Get-WinEvent -FilterHashtable @{LogName="Security"; Id=1102} -MaxEvents 1 -ErrorAction SilentlyContinue
 if ($eventLogClear) {
     Write-Host "Event Logs Cleared: Yes ($($eventLogClear.TimeCreated))" -ForegroundColor Yellow
@@ -62,9 +62,9 @@ if ($eventLogClear) {
     Write-Host "Event Logs Cleared: No" -ForegroundColor Green
 }
 
-# ===============================================
-# BRACKET 4: Prefetch Folder Scan
-# ===============================================
+
+# prefetch folder
+
 Write-Host "`n=== Prefetch Folder Scan ==="
 $prefetchPath = "$env:SystemRoot\Prefetch"
 
@@ -82,7 +82,5 @@ if (Test-Path $prefetchPath) {
     Write-Host "Prefetch folder not found" -ForegroundColor Red
 }
 
-# ===============================================
-# COMPLETION MESSAGE
-# ===============================================
+
 Write-Host "`nCheck complete." -ForegroundColor Cyan
