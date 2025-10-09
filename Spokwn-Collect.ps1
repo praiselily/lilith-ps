@@ -3,14 +3,15 @@
     Downloads all Spokwn DFIR utilities into C:\Screenshare
 
     Run via CMD:
-    powershell Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/lilithyo/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
+    powershell Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass ^
+        && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/lilithyo/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
 #>
 
 # --- Setup ---
 $BaseDir = "C:\Screenshare"
 $LogFile = "$BaseDir\download-log.txt"
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
-$ProgressPreference = 'SilentlyContinue'   # disables slow progress bar rendering
+$ProgressPreference = 'SilentlyContinue'
 
 Write-Host "=== Spokwn Tool Collector ==="
 Write-Host "All tools will be saved in: $BaseDir`n"
@@ -25,37 +26,57 @@ $Tools = @(
     @{ Name="PcaSvc Executed"; Url="https://github.com/spokwn/pcasvc-executed/releases/download/v0.8.7/PcaSvcExecuted.exe"; File="PcaSvcExecuted.exe" }
 )
 
-# --- Parallel downloads ---
+# --- Download helper ---
+function Download-Tool {
+    param($Name, $Url, $OutPath, $LogPath)
+
+    # Force TLS 1.2 for GitHub HTTPS
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    try {
+        Write-Host "`n[+] Downloading $Name..."
+        $start = Get-Date
+        Invoke-WebRequest -Uri $Url -OutFile $OutPath -ErrorAction Stop
+        $elapsed = [math]::Round((New-TimeSpan $start (Get-Date)).TotalSeconds, 1)
+        Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - Downloaded: $Name ($elapsed s)"
+        Write-Host "    -> Saved to $OutPath"
+    }
+    catch {
+        Write-Warning "Failed to download $Name : $($_.Exception.Message)"
+        Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - FAILED: $Name ($Url)"
+    }
+}
+
+# --- Parallel downloads (Windows-safe) ---
+# Jobs in PS5.1 lose TLS settings, so re-set inside each job
 Write-Host "`nStarting downloads in parallel..."
 $jobs = @()
 
 foreach ($tool in $Tools) {
     $out = Join-Path $BaseDir $tool.File
-    $jobs += Start-Job -ScriptBlock {
+    $jobs += Start-Job -InitializationScript {
+        # ensure TLS 1.2 inside the job
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    } -ScriptBlock {
         param($Name, $Url, $OutPath, $LogPath)
 
-        function Download-Tool {
-            param($Name, $Url, $OutPath, $LogPath)
-            try {
-                Write-Host "`n[+] Downloading $Name..."
-                $start = Get-Date
-                Invoke-WebRequest -Uri $Url -OutFile $OutPath -ErrorAction Stop
-                $elapsed = [math]::Round((New-TimeSpan $start (Get-Date)).TotalSeconds, 1)
-                Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - Downloaded: $Name ($elapsed s)"
-                Write-Host "    -> Saved to $OutPath"
-            }
-            catch {
-                Write-Warning "Failed to download $Name : $($_.Exception.Message)"
-                Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - FAILED: $Name ($Url)"
-            }
+        try {
+            Write-Host "`n[+] Downloading $Name..."
+            $start = Get-Date
+            Invoke-WebRequest -Uri $Url -OutFile $OutPath -ErrorAction Stop
+            $elapsed = [math]::Round((New-TimeSpan $start (Get-Date)).TotalSeconds, 1)
+            Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - Downloaded: $Name ($elapsed s)"
+            Write-Host "    -> Saved to $OutPath"
         }
-
-        Download-Tool -Name $Name -Url $Url -OutPath $OutPath -LogPath $LogPath
+        catch {
+            Write-Warning "Failed to download $Name : $($_.Exception.Message)"
+            Add-Content -Path $LogPath -Value "$(Get-Date -Format 'u') - FAILED: $Name ($Url)"
+        }
 
     } -ArgumentList $tool.Name, $tool.Url, $out, $LogFile
 }
 
-# Wait for all jobs and clean up
+# Wait for all jobs and collect output
 $jobs | Wait-Job | ForEach-Object {
     Receive-Job $_ -ErrorAction SilentlyContinue
     Remove-Job $_
@@ -63,9 +84,9 @@ $jobs | Wait-Job | ForEach-Object {
 
 # --- Summary ---
 if (Select-String -Path $LogFile -Pattern "FAILED" -Quiet) {
-    Write-Host "`n⚠️ Some downloads failed. Check log for details:" -ForegroundColor Yellow
+    Write-Host "`n⚠️  Some downloads failed. Check log for details:" -ForegroundColor Yellow
 } else {
-    Write-Host "`n✅ All Spokwn tools downloaded successfully." -ForegroundColor Green
+    Write-Host "`n✅  All Spokwn tools downloaded successfully." -ForegroundColor Green
 }
 
 Write-Host "Location: $BaseDir"
