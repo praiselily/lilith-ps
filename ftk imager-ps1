@@ -1,0 +1,28 @@
+<# downloads ftk imager to current path
+#> to run just cd your directory and run the script
+
+
+$downloadUrl = "https://d1kpmuwb7gvu1i.cloudfront.net/AccessData_FTK_Imager_4.7.1.exe"
+
+
+$tempInstaller = "$env:TEMP\AccessData_FTK_Imager_4.7.1.exe"
+$installDir = (Get-Location).Path
+
+Write-Host "Downloading FTK Imager installer..." -ForegroundColor Cyan
+Invoke-WebRequest -Uri $downloadUrl -OutFile $tempInstaller
+
+if (Test-Path $tempInstaller) {
+    Write-Host "Download complete: $tempInstaller" -ForegroundColor Green
+    Write-Host "Installing FTK Imager to: $installDir" -ForegroundColor Cyan
+
+    
+    
+    Start-Process -FilePath $tempInstaller -ArgumentList "/S", "/D=$installDir" -Wait
+
+    
+    Remove-Item $tempInstaller -Force
+
+    Write-Host "FTK Imager installation complete in $installDir" -ForegroundColor Green
+} else {
+    Write-Host "Download failed. File not found." -ForegroundColor Red
+}
