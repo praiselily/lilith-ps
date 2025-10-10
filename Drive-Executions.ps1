@@ -1,7 +1,7 @@
 <#
-.SYNOPSIS
-    Scans all drives except C: for executed files and USN Journal for file modifications
-.DESCRIPTION
+
+    Scans all drives except C: for executed files
+
     This script scans Prefetch, ShimCache, AmCache, ActivityCache for executed files
     and USN Journal for file modifications on all drives except C:
 #>
