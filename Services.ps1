@@ -1,7 +1,5 @@
-# ===============================================
-# Services
-# ===============================================
-Write-Host "<-- Service Status -->"
+Write-Host @"made with love by lily<3"@ -ForegroundColor Cyan
+Write-Host "< Service Status >"
 
 $services = @("SysMain", "PcaSvc", "DPS", "EventLog", "Schedule", "Bam", "Dusmsvc", "Appinfo", "CDPSvc", "DcomLaunch", "PlugPlay", "wsearch")
 
@@ -16,9 +14,39 @@ foreach ($svcName in $services) {
 }
 
 
-# reg keys
+Write-Host "`n< Service Start Time >"
 
-Write-Host "`n<-- Registry -->"
+foreach ($svcName in $services) {
+    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq "Running") {
+        try {
+            $process = Get-WmiObject Win32_Service -Filter "Name='$svcName'" | Select-Object ProcessId
+            if ($process.ProcessId -gt 0) {
+                $proc = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+                if ($proc) {
+                    Write-Host ("{0,-15} {1}" -f $svcName, $proc.StartTime.ToString("yyyy-MM-dd HH:mm:ss")) -ForegroundColor Cyan
+                }
+            }
+        } catch {
+            Write-Host ("{0,-15} {1}" -f $svcName, "N/A") -ForegroundColor Yellow
+        }
+    }
+}
+
+
+Write-Host "`n< System Boot Time >"
+
+try {
+    $bootTime = (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
+    $uptime = (Get-Date) - $bootTime
+    Write-Host ("Last Boot: {0}" -f $bootTime.ToString("yyyy-MM-dd HH:mm:ss")) -ForegroundColor Cyan
+    Write-Host ("Uptime: {0} days, {1:D2}:{2:D2}:{3:D2}" -f $uptime.Days, $uptime.Hours, $uptime.Minutes, $uptime.Seconds) -ForegroundColor Cyan
+} catch {
+    Write-Host "Unable to retrieve boot time information" -ForegroundColor Red
+}
+
+
+Write-Host "`n< Registry >"
 
 $settings = @(
     @{ Name = "CMD"; Path = "HKCU:\Software\Policies\Microsoft\Windows\System"; Key = "DisableCMD"; Warning = "Disabled"; Safe = "Available" },
@@ -38,10 +66,7 @@ foreach ($s in $settings) {
 }
 
 
-# event logs
-
-Write-Host "`n<-- Event Log -->"
-
+Write-Host "`n< Event Log >"
 
 $usnClear = Get-WinEvent -FilterHashtable @{LogName="Application"; Id=3079} -MaxEvents 1 -ErrorAction SilentlyContinue
 if ($usnClear) {
@@ -49,7 +74,6 @@ if ($usnClear) {
 } else {
     Write-Host "USN Journal Cleared: No" -ForegroundColor Green
 }
-
 
 $eventLogClear = Get-WinEvent -FilterHashtable @{LogName="Security"; Id=1102} -MaxEvents 1 -ErrorAction SilentlyContinue
 if ($eventLogClear) {
@@ -59,9 +83,7 @@ if ($eventLogClear) {
 }
 
 
-# prefetch folder
-
-Write-Host "`n<-- Prefetch -->"
+Write-Host "`n< Prefetch >"
 $prefetchPath = "$env:SystemRoot\Prefetch"
 
 if (Test-Path $prefetchPath) {
@@ -78,5 +100,32 @@ if (Test-Path $prefetchPath) {
     Write-Host "Prefetch folder not found" -ForegroundColor Red
 }
 
+
+Write-Host "`n< Recycle Bin >"
+
+try {
+    
+    $recycleBinEvents = Get-WinEvent -FilterHashtable @{LogName="System"; Id=10006} -MaxEvents 1 -ErrorAction SilentlyContinue
+    
+    if ($recycleBinEvents) {
+        Write-Host "Recycle Bin Last Cleared: $($recycleBinEvents.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Yellow
+    } else {
+        
+        $recycleBinPath = "$env:SystemDrive`\$Recycle.Bin"
+        if (Test-Path $recycleBinPath) {
+            $recycleBinFolders = Get-ChildItem $recycleBinPath -Directory -ErrorAction SilentlyContinue
+            if ($recycleBinFolders) {
+                $latestMod = $recycleBinFolders | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                Write-Host "Recycle Bin Last Modified: $($latestMod.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
+            } else {
+                Write-Host "Recycle Bin appears empty or inaccessible" -ForegroundColor Green
+            }
+        } else {
+            Write-Host "Recycle Bin path not found" -ForegroundColor Red
+        }
+    }
+} catch {
+    Write-Host "Unable to access Recycle Bin information" -ForegroundColor Red
+}
 
 Write-Host "`nCheck complete." -ForegroundColor Cyan
