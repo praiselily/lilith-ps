@@ -4,6 +4,8 @@
 
     This script scans Prefetch, ShimCache, AmCache, ActivityCache for executed files
     and USN Journal for file modifications on all drives except C:
+
+    Made with love by lily<3
 #>
 Write-Host @"
 ___       ___  ___       ___  _________  ___  ___     
@@ -59,6 +61,7 @@ function Get-DigitalSignature {
         return "Error checking signature"
     }
 }
+
 
 $USN_REASON_DATA_OVERWRITE = 0x00000001
 $USN_REASON_DATA_EXTEND = 0x00000002
@@ -130,84 +133,178 @@ function Get-USNJournalEntries {
             
             try {
                 $driveLetter = $drive.Root.TrimEnd('\')
-                $usnData = fsutil usn readJournal $driveLetter | Out-String
                 
-                $entries = $usnData -split "USN_RECORD" | Where-Object { $_ -match "File" }
                 
-                foreach ($entry in $entries) {
+                Write-Log "Attempting to read USN Journal from $driveLetter using fsutil..."
+                
+                $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+                $processStartInfo.FileName = "fsutil.exe"
+                $processStartInfo.Arguments = "usn readJournal $driveLetter"
+                $processStartInfo.RedirectStandardOutput = $true
+                $processStartInfo.RedirectStandardError = $true
+                $processStartInfo.UseShellExecute = $false
+                $processStartInfo.CreateNoWindow = $true
+                
+                $process = New-Object System.Diagnostics.Process
+                $process.StartInfo = $processStartInfo
+                $process.Start() | Out-Null
+                $output = $process.StandardOutput.ReadToEnd()
+                $errorOutput = $process.StandardError.ReadToEnd()
+                $process.WaitForExit()
+                
+                if (-not [string]::IsNullOrEmpty($errorOutput)) {
+                    Write-Log "Error reading USN Journal: $errorOutput"
+                    continue
+                }
+                
+                if ([string]::IsNullOrEmpty($output)) {
+                    Write-Log "No USN journal data returned from $driveLetter"
+                    continue
+                }
+                
+                Write-Log "Raw USN data length: $($output.Length) characters"
+                
+                
+                $records = $output -split "USN_RECORD ------"
+                
+                Write-Log "Found $($records.Length) potential USN records"
+                
+                foreach ($record in $records) {
                     try {
-                        if ($entry -match "File Name\s+:\s+(.+)") {
-                            $fileName = $matches[1].Trim()
+                        if ([string]::IsNullOrWhiteSpace($record)) { continue }
+                        
+                        $fileName = $null
+                        $reasonHex = $null
+                        $timestamp = $null
+                        
+                        
+                        $lines = $record -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+                        
+                        foreach ($line in $lines) {
+                            $trimmedLine = $line.Trim()
                             
-                            if ($entry -match "Reason\s+:\s+0x([0-9a-fA-F]+)") {
-                                $reasonHex = $matches[1]
-                                $reason = [Convert]::ToUInt32($reasonHex, 16)
-                                $reasonDesc = Get-USNReasonDescription -Reason $reason
-                                
-                                $isSuspicious = $false
-                                $suspiciousReasons = @()
-                                
-                                if ($reason -band $USN_REASON_FILE_DELETE) {
-                                    $isSuspicious = $true
-                                    $suspiciousReasons += "FILE_DELETED"
+                            
+                            if ($trimmedLine -match "File Name\s*:\s*(.+)") {
+                                $fileName = $matches[1].Trim()
+                            } elseif ($trimmedLine -match "Name\s*:\s*(.+)") {
+                                $fileName = $matches[1].Trim()
+                            }
+                            
+                            
+                            if ($trimmedLine -match "Reason\s*:\s*0x([0-9a-fA-F]+)") {
+                                $reasonHex = $matches[1].Trim()
+                            }
+                            
+                            
+                            if ($trimmedLine -match "Time Stamp\s*:\s*(.+)") {
+                                $timestamp = $matches[1].Trim()
+                            }
+                        }
+                        
+                        if ($fileName -and $reasonHex) {
+                            Write-Log "Processing USN entry: $fileName with reason 0x$reasonHex"
+                            
+                            $reason = [Convert]::ToUInt32($reasonHex, 16)
+                            $reasonDesc = Get-USNReasonDescription -Reason $reason
+                            
+                            $isSuspicious = $false
+                            $suspiciousReasons = @()
+                            
+                            
+                            if ($reason -band $USN_REASON_FILE_CREATE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_CREATED"
+                            }
+                            
+                            if ($reason -band $USN_REASON_FILE_DELETE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_DELETED"
+                            }
+                            
+                            if (($reason -band $USN_REASON_RENAME_OLD_NAME) -or 
+                                ($reason -band $USN_REASON_RENAME_NEW_NAME)) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_RENAMED"
+                            }
+                            
+                            
+                            if (($reason -band $USN_REASON_FILE_CREATE) -and 
+                                ($reason -band $USN_REASON_DATA_OVERWRITE)) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_REPLACED"
+                            }
+                            
+                            if ($reason -band $USN_REASON_HARD_LINK_CHANGE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "HARD_LINK_MODIFIED"
+                            }
+                            
+                            
+                            if ($fileName -match "\.(exe|dll|scr|bat|cmd|ps1|vbs|js|msi|com|pif|jar|wsf|cpl|reg|inf|sys)$") {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "EXECUTABLE_FILE"
+                            }
+                            
+                            
+                            if ($isSuspicious -and $suspiciousReasons.Count -gt 0) {
+                                $fullPath = Join-Path $drive.Root $fileName
+                                $fileExists = Test-Path $fullPath -ErrorAction SilentlyContinue
+                                $signature = if ($fileExists -and $fullPath -match "\.(exe|dll|sys)$") { 
+                                    Get-DigitalSignature -FilePath $fullPath 
+                                } else { 
+                                    "N/A" 
                                 }
                                 
-                                if (($reason -band $USN_REASON_DATA_OVERWRITE) -and 
-                                    ($reason -band $USN_REASON_CLOSE)) {
-                                    $isSuspicious = $true
-                                    $suspiciousReasons += "FILE_REPLACED"
+                                
+                                if (-not $timestamp -or $timestamp -eq "N/A") {
+                                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                                 }
                                 
-                                if (($reason -band $USN_REASON_FILE_CREATE) -and 
-                                    ($reason -band $USN_REASON_DATA_OVERWRITE)) {
-                                    $isSuspicious = $true
-                                    $suspiciousReasons += "RAPID_CREATE_OVERWRITE"
+                                $result = [PSCustomObject]@{
+                                    Source = "USN_Journal"
+                                    FullPath = $fullPath
+                                    Timestamp = $timestamp
+                                    FileExists = $fileExists
+                                    Signature = $signature
+                                    ArtifactFile = "$driveLetter\USN_Journal"
+                                    SuspiciousActivity = ($suspiciousReasons -join " | ")
+                                    USNReason = $reasonDesc
+                                    RawReason = "0x$reasonHex"
                                 }
+                                $results += $result
                                 
-                                if ($fileName -match "\.(exe|dll|scr|bat|cmd|ps1|vbs|js)$") {
-                                    $isSuspicious = $true
-                                    $suspiciousReasons += "EXECUTABLE_MODIFIED"
-                                }
-                                
-                                if ($fileName -match "\.tmp$|temp\\|tmp\\|~$") {
-                                    $isSuspicious = $true
-                                    $suspiciousReasons += "TEMPORARY_FILE_ACTIVITY"
-                                }
-                                
-                                if ($isSuspicious) {
-                                    $fullPath = Join-Path $drive.Root $fileName
-                                    $fileExists = Test-Path $fullPath
-                                    $signature = if ($fileExists -and $fullPath -match "\.(exe|dll)$") { 
-                                        Get-DigitalSignature -FilePath $fullPath 
-                                    } else { 
-                                        "N/A" 
-                                    }
-                                    
-                                    $timestamp = "N/A"
-                                    if ($entry -match "Time Stamp:\s+(.+)") {
-                                        $timestamp = $matches[1].Trim()
-                                    }
-                                    
-                                    $result = [PSCustomObject]@{
-                                        Source = "USN_Journal"
-                                        FullPath = $fullPath
-                                        Timestamp = $timestamp
-                                        FileExists = $fileExists
-                                        Signature = $signature
-                                        ArtifactFile = $drive.Root + "\$UsnJrnl"
-                                        SuspiciousActivity = ($suspiciousReasons -join " | ")
-                                        USNReason = $reasonDesc
-                                        RawReason = "0x$reasonHex"
-                                    }
-                                    $results += $result
-                                }
+                                Write-Log "Logged suspicious USN entry: $fileName - $($suspiciousReasons -join ', ')"
                             }
                         }
                     }
                     catch {
-                        Write-Log "Error parsing USN entry: $($_.Exception.Message)"
+                        Write-Log "Error parsing individual USN record: $($_.Exception.Message)"
                     }
                 }
+                
+                
+                Write-Log "Performing alternative file system scan on $driveLetter..."
+                $recentFiles = Get-ChildItem -Path "$driveLetter\" -Recurse -ErrorAction SilentlyContinue | 
+                              Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-24) } |
+                              Select-Object -First 100
+                
+                foreach ($file in $recentFiles) {
+                    if ($file.FullName -match "\.(exe|dll|scr|bat|cmd|ps1|vbs)$") {
+                        $result = [PSCustomObject]@{
+                            Source = "Recent_File_Scan"
+                            FullPath = $file.FullName
+                            Timestamp = $file.LastWriteTime
+                            FileExists = $true
+                            Signature = Get-DigitalSignature -FilePath $file.FullName
+                            ArtifactFile = "File_System"
+                            SuspiciousActivity = "RECENTLY_MODIFIED_EXECUTABLE"
+                            USNReason = "N/A"
+                            RawReason = "N/A"
+                        }
+                        $results += $result
+                    }
+                }
+                
             }
             catch {
                 Write-Log "Error accessing USN Journal on drive $($drive.Root): $($_.Exception.Message)"
@@ -221,6 +318,7 @@ function Get-USNJournalEntries {
     Write-Log "USN Journal scan completed. Found $($results.Count) suspicious entries."
     return $results
 }
+
 
 function Get-PrefetchFiles {
     Write-Log "Scanning Prefetch files..."
@@ -599,7 +697,7 @@ Write-Log "Total unique files found: $($uniqueResults.Count)"
 Write-Log "Suspicious activities detected: $suspiciousCount"
 Write-Log "Results saved to: $OutputFile"
 
-Write-Host "`n=== SCAN COMPLETED ===" -ForegroundColor Green
+Write-Host "`n> SCAN COMPLETED <" -ForegroundColor Green
 Write-Host "Opening results GUI..." -ForegroundColor Yellow
 Write-Host "Total files found: $($uniqueResults.Count)" -ForegroundColor Yellow
 Write-Host "Suspicious activities: $suspiciousCount" -ForegroundColor Red
