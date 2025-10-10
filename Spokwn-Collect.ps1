@@ -7,13 +7,27 @@
     powershell Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass ^
         && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
 #>
+Write-Host @"
+___       ___  ___       ___  _________  ___  ___     
+|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
+\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
+ \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
+  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
+   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
+    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
+                                                       
+                                                       
+                                                       
+"@ -ForegroundColor Cyan
+
+
 
 $BaseDir = "C:\Screenshare"
 $LogFile = "$BaseDir\download-log.txt"
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
 $ProgressPreference = 'SilentlyContinue'
 
-Write-Host "=== Spokwn Tool Collector ==="
+Write-Host "> Spokwn Tool Collector <"
 Write-Host "All tools will be saved in: $BaseDir`n"
 
 $Tools = @(
