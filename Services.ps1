@@ -1,7 +1,7 @@
 # ===============================================
 # Services
 # ===============================================
-Write-Host "=== Service Status ==="
+Write-Host "<-- Service Status -->"
 
 $services = @("SysMain", "PcaSvc", "DPS", "EventLog", "Schedule", "Bam", "Dusmsvc", "Appinfo", "CDPSvc", "DcomLaunch", "PlugPlay", "wsearch")
 
@@ -18,7 +18,7 @@ foreach ($svcName in $services) {
 
 # reg keys
 
-Write-Host "`n=== Registry Settings ==="
+Write-Host "`n<-- Registry -->"
 
 $settings = @(
     @{ Name = "CMD"; Path = "HKCU:\Software\Policies\Microsoft\Windows\System"; Key = "DisableCMD"; Warning = "Disabled"; Safe = "Available" },
@@ -40,7 +40,7 @@ foreach ($s in $settings) {
 
 # event logs
 
-Write-Host "`n=== Event Log Checks ==="
+Write-Host "`n<-- Event Log -->"
 
 
 $usnClear = Get-WinEvent -FilterHashtable @{LogName="Application"; Id=3079} -MaxEvents 1 -ErrorAction SilentlyContinue
@@ -61,7 +61,7 @@ if ($eventLogClear) {
 
 # prefetch folder
 
-Write-Host "`n=== Prefetch Folder Scan ==="
+Write-Host "`n<-- Prefetch -->"
 $prefetchPath = "$env:SystemRoot\Prefetch"
 
 if (Test-Path $prefetchPath) {
