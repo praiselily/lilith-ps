@@ -1,13 +1,13 @@
 <#
     Spokwn Tool Collector
-    Downloads all Spokwn DFIR utilities into C:\Screenshare
+    Downloads most of spoks tools into C:\Screenshare, not all are included but i added the ones i use the most. espouken.exe and bamparser.exe might require you to disable your AV.
 
     Run via CMD:
     powershell Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass ^
-        && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/lilithyo/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
+        && powershell Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Spokwn-Collect.ps1)
 #>
 
-# setup
+# logging
 $BaseDir = "C:\Screenshare"
 $LogFile = "$BaseDir\download-log.txt"
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
@@ -16,7 +16,7 @@ $ProgressPreference = 'SilentlyContinue'
 Write-Host "=== Spokwn Tool Collector ==="
 Write-Host "All tools will be saved in: $BaseDir`n"
 
-# listin all da tools
+# tools
 $Tools = @(
     @{ Name="Kernel Live Dump Analyzer Parser"; Url="https://github.com/spokwn/KernelLiveDumpTool/releases/download/v1.1/KernelLiveDumpTool.exe"; File="KernelLiveDumpTool.exe" },
     @{ Name="BAM Parser"; Url="https://github.com/spokwn/BAM-parser/releases/download/v1.2.9/BAMParser.exe"; File="BAMParser.exe" },
@@ -47,7 +47,7 @@ function Download-Tool {
     }
 }
 
-# parallel
+# download2
 # Jobs in PS5.1 lose TLS settings, so re-set inside each job
 Write-Host "`nStarting downloads in parallel..."
 $jobs = @()
@@ -82,7 +82,7 @@ $jobs | Wait-Job | ForEach-Object {
     Remove-Job $_
 }
 
-# end
+
 if (Select-String -Path $LogFile -Pattern "FAILED" -Quiet) {
     Write-Host "`n⚠️  Some downloads failed. Check log for details:" -ForegroundColor Yellow
 } else {
