@@ -1,12 +1,11 @@
-<#
 
-    Scans all drives except C: for executed files
+#    Scans all drives except C: for executed files
 
-    This script scans Prefetch, ShimCache, AmCache, ActivityCache for executed files
-    and USN Journal for file modifications on all drives except C:
+#    This script scans Prefetch, ShimCache, AmCache, ActivityCache for executed files
+#    and USN Journal for file modifications on all drives except C:
 
-    Made with love by lily<3
-#>
+#    Made with love by lily<3
+
 Write-Host @"
 ___       ___  ___       ___  _________  ___  ___     
 |\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
