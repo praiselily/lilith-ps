@@ -18,7 +18,7 @@ try {
     Write-Host ("  └─ Last Boot: {0}" -f $bootTime.ToString("yyyy-MM-dd HH:mm:ss")) -ForegroundColor White
     Write-Host ("  └─ Uptime: {0} days, {1:D2}:{2:D2}:{3:D2}" -f $uptime.Days, $uptime.Hours, $uptime.Minutes, $uptime.Seconds) -ForegroundColor White
 } catch {
-    Write-Host "❌ Unable to retrieve boot time information" -ForegroundColor Red
+    Write-Host " Unable to retrieve boot time information" -ForegroundColor Red
 }
 
 $drives = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -ne 5 }
@@ -57,19 +57,19 @@ foreach ($svc in $services) {
                 if ($process.ProcessId -gt 0) {
                     $proc = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
                     if ($proc) {
-                        Write-Host (" │ 🕐 {0}" -f $proc.StartTime.ToString("HH:mm:ss")) -ForegroundColor Cyan
+                        Write-Host (" │  {0}" -f $proc.StartTime.ToString("HH:mm:ss")) -ForegroundColor Cyan
                     } else {
-                        Write-Host (" │ ⏱️  N/A" -f $proc.StartTime.ToString("HH:mm:ss")) -ForegroundColor DarkGray
+                        Write-Host (" │   N/A" -f $proc.StartTime.ToString("HH:mm:ss")) -ForegroundColor DarkGray
                     }
                 }
             } catch {
-                Write-Host " │ ⏱️  N/A" -ForegroundColor DarkGray
+                Write-Host " │   N/A" -ForegroundColor DarkGray
             }
         } else {
-            Write-Host ("  ❌ {0,-15} {1,-35} {2}" -f $svc.Name, $service.DisplayName, $service.Status) -ForegroundColor Red
+            Write-Host ("   {0,-15} {1,-35} {2}" -f $svc.Name, $service.DisplayName, $service.Status) -ForegroundColor Red
         }
     } else {
-        Write-Host ("  ⚠️  {0,-15} {1,-35} {2}" -f $svc.Name, "Not Found", "Stopped") -ForegroundColor Yellow
+        Write-Host ("    {0,-15} {1,-35} {2}" -f $svc.Name, "Not Found", "Stopped") -ForegroundColor Yellow
     }
 }
 
