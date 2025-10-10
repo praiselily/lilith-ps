@@ -5,12 +5,22 @@
     This script scans Prefetch, ShimCache, AmCache, ActivityCache for executed files
     and USN Journal for file modifications on all drives except C:
 #>
+Write-Host @"
+___       ___  ___       ___  _________  ___  ___     
+|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
+\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
+ \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
+  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
+   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
+    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
+                                                       
+                                                       
+                                                       
+"@ -ForegroundColor Cyan
 
-# path
 $OutputDirectory = "C:\Screenshare"
 $OutputFile = Join-Path $OutputDirectory "output.txt"
 $Artifacts = @()
-
 
 if (-not (Test-Path $OutputDirectory)) {
     try {
@@ -50,7 +60,6 @@ function Get-DigitalSignature {
     }
 }
 
-# usn
 $USN_REASON_DATA_OVERWRITE = 0x00000001
 $USN_REASON_DATA_EXTEND = 0x00000002
 $USN_REASON_DATA_TRUNCATION = 0x00000004
@@ -112,7 +121,6 @@ function Get-USNJournalEntries {
     $results = @()
     
     try {
-        
         $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { 
             $_.Root -ne "C:\" -and $_.Root -ne $env:SystemDrive -and $_.Used -gt 0
         }
@@ -121,16 +129,13 @@ function Get-USNJournalEntries {
             Write-Log "Scanning USN Journal on drive: $($drive.Root)"
             
             try {
-                
                 $driveLetter = $drive.Root.TrimEnd('\')
                 $usnData = fsutil usn readJournal $driveLetter | Out-String
-                
                 
                 $entries = $usnData -split "USN_RECORD" | Where-Object { $_ -match "File" }
                 
                 foreach ($entry in $entries) {
                     try {
-                        
                         if ($entry -match "File Name\s+:\s+(.+)") {
                             $fileName = $matches[1].Trim()
                             
@@ -139,16 +144,13 @@ function Get-USNJournalEntries {
                                 $reason = [Convert]::ToUInt32($reasonHex, 16)
                                 $reasonDesc = Get-USNReasonDescription -Reason $reason
                                 
-                                
                                 $isSuspicious = $false
                                 $suspiciousReasons = @()
-                                
                                 
                                 if ($reason -band $USN_REASON_FILE_DELETE) {
                                     $isSuspicious = $true
                                     $suspiciousReasons += "FILE_DELETED"
                                 }
-                                
                                 
                                 if (($reason -band $USN_REASON_DATA_OVERWRITE) -and 
                                     ($reason -band $USN_REASON_CLOSE)) {
@@ -156,19 +158,16 @@ function Get-USNJournalEntries {
                                     $suspiciousReasons += "FILE_REPLACED"
                                 }
                                 
-                                
                                 if (($reason -band $USN_REASON_FILE_CREATE) -and 
                                     ($reason -band $USN_REASON_DATA_OVERWRITE)) {
                                     $isSuspicious = $true
                                     $suspiciousReasons += "RAPID_CREATE_OVERWRITE"
                                 }
                                 
-                                
                                 if ($fileName -match "\.(exe|dll|scr|bat|cmd|ps1|vbs|js)$") {
                                     $isSuspicious = $true
                                     $suspiciousReasons += "EXECUTABLE_MODIFIED"
                                 }
-                                
                                 
                                 if ($fileName -match "\.tmp$|temp\\|tmp\\|~$") {
                                     $isSuspicious = $true
@@ -184,7 +183,6 @@ function Get-USNJournalEntries {
                                         "N/A" 
                                     }
                                     
-                                    # timestamps
                                     $timestamp = "N/A"
                                     if ($entry -match "Time Stamp:\s+(.+)") {
                                         $timestamp = $matches[1].Trim()
@@ -233,9 +231,7 @@ function Get-PrefetchFiles {
         $prefetchFiles = Get-ChildItem -Path $prefetchPath -Filter "*.pf" -ErrorAction SilentlyContinue
         foreach ($pf in $prefetchFiles) {
             try {
-                
                 $exeName = $pf.Name.Split('-')[0] + ".exe"
-                
                 
                 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -ne "C:\" -and $_.Root -ne $env:SystemDrive }
                 foreach ($drive in $drives) {
@@ -287,7 +283,6 @@ function Get-ShimCacheEntries {
     $results = @()
     
     try {
-        # shimcaches
         $shimPaths = @(
             "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\AppCompatCache",
             "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\AppCompatibility"
@@ -297,12 +292,9 @@ function Get-ShimCacheEntries {
             try {
                 $cache = Get-ItemProperty -Path $regPath -Name "AppCompatCache" -ErrorAction SilentlyContinue
                 if ($cache) {
-                    
-                    
                     $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -ne "C:\" -and $_.Root -ne $env:SystemDrive }
                     
                     foreach ($drive in $drives) {
-                        
                         $patterns = @(
                             "$($drive.Root)*.exe",
                             "$($drive.Root)Program Files\**\*.exe",
@@ -319,7 +311,7 @@ function Get-ShimCacheEntries {
                                 $result = [PSCustomObject]@{
                                     Source = "ShimCache"
                                     FullPath = $file.FullName
-                                    Timestamp = "N/A" 
+                                    Timestamp = "N/A"
                                     FileExists = $fileExists
                                     Signature = $signature
                                     ArtifactFile = $regPath
@@ -334,7 +326,6 @@ function Get-ShimCacheEntries {
                 }
             }
             catch {
-                
                 $errorMsg = "Error accessing registry path " + $regPath + ": " + $_.Exception.Message
                 Write-Log $errorMsg
             }
@@ -354,12 +345,9 @@ function Get-AmCacheEntries {
     try {
         $amcachePath = "$env:SystemRoot\AppCompat\Programs\Amcache.hve"
         if (Test-Path $amcachePath) {
-            
-            
             $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -ne "C:\" -and $_.Root -ne $env:SystemDrive }
             
             foreach ($drive in $drives) {
-                
                 $searchPaths = @(
                     "$($drive.Root)Users\*\AppData\Local\Temp\*.exe",
                     "$($drive.Root)Users\*\Downloads\*.exe",
@@ -405,17 +393,14 @@ function Get-ActivityCache {
     $results = @()
     
     try {
-        
         $recentCache = "$env:LocalAppData\ConnectedDevicesPlatform\*\ActivitiesCache.db"
         $cacheFiles = Get-ChildItem -Path $recentCache -ErrorAction SilentlyContinue
         
         foreach ($cacheFile in $cacheFiles) {
             try {
-                
                 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -ne "C:\" -and $_.Root -ne $env:SystemDrive }
                 
                 foreach ($drive in $drives) {
-                    
                     $files = Get-ChildItem -Path "$($drive.Root)*.exe" -ErrorAction SilentlyContinue |
                             Where-Object { $_.LastAccessTime -gt (Get-Date).AddDays(-60) } |
                             Select-Object -First 30
@@ -456,11 +441,9 @@ function Show-ResultsGUI {
         [array]$Results
     )
     
-    
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
 
-    
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "Executed Files & USN Journal Scan Results"
     $form.Size = New-Object System.Drawing.Size(1400, 700)
@@ -468,7 +451,6 @@ function Show-ResultsGUI {
     $form.MaximizeBox = $true
     $form.MinimizeBox = $true
 
-    # griddy
     $dataGridView = New-Object System.Windows.Forms.DataGridView
     $dataGridView.Location = New-Object System.Drawing.Point(10, 10)
     $dataGridView.Size = New-Object System.Drawing.Size(1360, 550)
@@ -479,7 +461,6 @@ function Show-ResultsGUI {
     $dataGridView.AllowUserToDeleteRows = $false
     $dataGridView.RowHeadersVisible = $false
 
-    
     $columns = @(
         @{Name="Timestamp"; HeaderText="Timestamp"},
         @{Name="FilePath"; HeaderText="File Path"},
@@ -497,11 +478,10 @@ function Show-ResultsGUI {
         $dataGridView.Columns.Add($col) | Out-Null
     }
 
-    
     $dataGridView.Add_CellFormatting({
         param($sender, $e)
         
-        if ($e.ColumnIndex -eq 5) { 
+        if ($e.ColumnIndex -eq 5) {
             $activity = $sender.Rows[$e.RowIndex].Cells[5].Value
             if ($activity -ne "N/A" -and $activity -ne $null) {
                 $e.CellStyle.BackColor = [System.Drawing.Color]::LightCoral
@@ -510,9 +490,7 @@ function Show-ResultsGUI {
         }
     })
 
-    
     foreach ($result in $Results) {
-        
         $timestamp = if ($result.Timestamp -eq "N/A") { "N/A" } else { 
             try {
                 if ($result.Timestamp -is [datetime]) {
@@ -526,9 +504,7 @@ function Show-ResultsGUI {
             }
         }
         
-        
         $fileStatus = if ($result.FileExists) { "File is still present" } else { "File is not present" }
-        
         
         $signature = $result.Signature
         if ($signature.Length -gt 50) {
@@ -540,21 +516,18 @@ function Show-ResultsGUI {
         $dataGridView.Rows.Add($row) | Out-Null
     }
 
-    
     $summaryLabel = New-Object System.Windows.Forms.Label
     $summaryLabel.Location = New-Object System.Drawing.Point(10, 570)
     $summaryLabel.Size = New-Object System.Drawing.Size(1000, 20)
     $suspiciousCount = ($Results | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
     $summaryLabel.Text = "Total files found: $($Results.Count) | Suspicious activities: $suspiciousCount | Output saved to: $OutputFile"
 
-    
     $closeButton = New-Object System.Windows.Forms.Button
     $closeButton.Location = New-Object System.Drawing.Point(1250, 570)
     $closeButton.Size = New-Object System.Drawing.Size(120, 30)
     $closeButton.Text = "Close"
     $closeButton.Add_Click({ $form.Close() })
 
-    
     $exportButton = New-Object System.Windows.Forms.Button
     $exportButton.Location = New-Object System.Drawing.Point(1120, 570)
     $exportButton.Size = New-Object System.Drawing.Size(120, 30)
@@ -569,27 +542,22 @@ function Show-ResultsGUI {
         }
     })
 
-    
     $form.Controls.Add($dataGridView)
     $form.Controls.Add($summaryLabel)
     $form.Controls.Add($closeButton)
     $form.Controls.Add($exportButton)
 
-    
     $form.Add_Shown({$form.Activate()})
     $form.ShowDialog() | Out-Null
 }
 
-
 Write-Log "Starting executed files and USN Journal scan on non-C drives..."
 Write-Log "Output file: $OutputFile"
 
-# admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
     Write-Warning "Not running as administrator. Some artifacts may not be accessible."
 }
-
 
 if (Test-Path $OutputFile) {
     try {
@@ -601,7 +569,6 @@ if (Test-Path $OutputFile) {
     }
 }
 
-
 Write-Log "Collecting data from various artifacts..."
 
 $Artifacts += Get-PrefetchFiles
@@ -610,12 +577,9 @@ $Artifacts += Get-AmCacheEntries
 $Artifacts += Get-ActivityCache
 $Artifacts += Get-USNJournalEntries
 
-# dupes
 $uniqueResults = $Artifacts | Sort-Object FullPath, Source | Get-Unique -AsString
 
-
 Write-Log "Writing results to output file..."
-
 
 $header = "Source`tFullPath`tTimestamp`tFileExists`tSignature`tArtifactFile`tSuspiciousActivity`tUSNReason`tRawReason"
 Add-Content -Path $OutputFile -Value "EXECUTED FILES & USN JOURNAL SCAN REPORT"
@@ -624,12 +588,10 @@ Add-Content -Path $OutputFile -Value "Scan Target: All drives except C:"
 Add-Content -Path $OutputFile -Value "=" * 80
 Add-Content -Path $OutputFile -Value $header
 
-
 foreach ($result in $uniqueResults) {
     $line = "$($result.Source)`t$($result.FullPath)`t$($result.Timestamp)`t$($result.FileExists)`t$($result.Signature)`t$($result.ArtifactFile)`t$($result.SuspiciousActivity)`t$($result.USNReason)`t$($result.RawReason)"
     Add-Content -Path $OutputFile -Value $line
 }
-
 
 $suspiciousCount = ($uniqueResults | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
 Write-Log "Scan completed!"
@@ -637,12 +599,10 @@ Write-Log "Total unique files found: $($uniqueResults.Count)"
 Write-Log "Suspicious activities detected: $suspiciousCount"
 Write-Log "Results saved to: $OutputFile"
 
-
 Write-Host "`n=== SCAN COMPLETED ===" -ForegroundColor Green
 Write-Host "Opening results GUI..." -ForegroundColor Yellow
 Write-Host "Total files found: $($uniqueResults.Count)" -ForegroundColor Yellow
 Write-Host "Suspicious activities: $suspiciousCount" -ForegroundColor Red
 Write-Host "File also saved to: C:\Screenshare\output.txt" -ForegroundColor Cyan
-
 
 Show-ResultsGUI -Results $uniqueResults
