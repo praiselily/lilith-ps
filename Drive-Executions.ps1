@@ -585,7 +585,7 @@ $header = "Source`tFullPath`tTimestamp`tFileExists`tSignature`tArtifactFile`tSus
 Add-Content -Path $OutputFile -Value "EXECUTED FILES & USN JOURNAL SCAN REPORT"
 Add-Content -Path $OutputFile -Value "Generated: $(Get-Date)"
 Add-Content -Path $OutputFile -Value "Scan Target: All drives except C:"
-Add-Content -Path $OutputFile -Value "=" * 80
+Add-Content -Path $OutputFile -Value ("=" * 80)
 Add-Content -Path $OutputFile -Value $header
 
 foreach ($result in $uniqueResults) {
