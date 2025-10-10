@@ -2,7 +2,18 @@
     downloads ftk imager to current path
     to run: cd to your directory and run this script (run your invoke as admin)
 #>
-
+Write-Host @"
+___       ___  ___       ___  _________  ___  ___     
+|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
+\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
+ \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
+  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
+   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
+    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
+Made with love by lily<3                                                       
+                                                       
+                                                       
+"@ -ForegroundColor Cyan
 
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
