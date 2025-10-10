@@ -1,6 +1,4 @@
-Write-Host @"
-made with love by lily<3
-"@ -ForegroundColor Cyan
+Write-Host "made with love by lily<3" -ForegroundColor Cyan
 Write-Host "< Service Status >"
 
 $services = @("SysMain", "PcaSvc", "DPS", "EventLog", "Schedule", "Bam", "Dusmsvc", "Appinfo", "CDPSvc", "DcomLaunch", "PlugPlay", "wsearch")
