@@ -1,4 +1,5 @@
-Write-Host @"made with love by lily<3
+Write-Host @"
+made with love by lily<3
 "@ -ForegroundColor Cyan
 Write-Host "< Service Status >"
 
