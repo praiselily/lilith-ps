@@ -1,0 +1,1014 @@
+Write-Host @"
+___       ___  ___       ___  _________  ___  ___     
+|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
+\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
+ \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
+  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
+   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
+    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
+Made with love by lily<3                                                       
+                                                       
+                                                       
+"@ -ForegroundColor Cyan
+
+$OutputDirectory = "C:\Screenshare"
+$OutputFile = Join-Path $OutputDirectory "output.txt"
+$Artifacts = @()
+
+$SuspiciousKeywords = @("clicker", "auto", "mousebutton", "vape", "drip", "cheat", "hack", "inject", "bot", "macro", "manthe", "ghost", "client", "spoofer", "aim", "trigger", "reach", "velocity", "scaffold", "ka", "killaura", "keyauth", "hwid", "spoof", "anti", "echo")
+
+$SuspiciousSigners = @("Manthe Industries LLC")
+
+$SpoofedExtensions = @(".dll", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar", ".wsf", ".cpl", ".reg", ".inf", ".com", ".pif", ".msi", ".app", ".appx", ".msix", ".iso", ".img", ".bin", ".dat", ".tmp", ".temp", ".log", ".txt", ".ini", ".cfg", ".config", ".xml", ".json", ".db", ".sqlite", ".accdb", ".mdb", ".zip", ".rar", ".7z", ".tar", ".gz")
+
+$BootTime = (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
+
+if (-not (Test-Path $OutputDirectory)) {
+    try {
+        New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+        Write-Host "Created output directory: $OutputDirectory" -ForegroundColor Green
+    }
+    catch {
+        Write-Error "Failed to create output directory: $OutputDirectory"
+        Write-Error "Error: $($_.Exception.Message)"
+        exit 1
+    }
+}
+
+function Write-Log {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] $Message"
+    Write-Host $logEntry
+    Add-Content -Path $OutputFile -Value $logEntry
+}
+
+function Get-DigitalSignature {
+    param([string]$FilePath)
+    
+    try {
+        if (-not (Test-Path $FilePath)) { return "File not found" }
+        if ((Get-Item $FilePath -ErrorAction SilentlyContinue) -is [System.IO.DirectoryInfo]) { return "N/A" }
+        
+        $sig = Get-AuthenticodeSignature -FilePath $FilePath -ErrorAction SilentlyContinue
+        if ($sig -and $sig.Status -eq "Valid") {
+            $signer = $sig.SignerCertificate.Subject
+            foreach ($suspiciousSigner in $SuspiciousSigners) {
+                if ($signer -match $suspiciousSigner) {
+                    return "SUSPICIOUS_SIGNER - $signer"
+                }
+            }
+            return "Signed - $signer"
+        } elseif ($sig -and $sig.Status -ne "Valid") {
+            return "Invalid - $($sig.Status)"
+        } else {
+            return "Not Signed"
+        }
+    }
+    catch {
+        return "Error checking signature"
+    }
+}
+
+function Test-SuspiciousFile {
+    param([string]$FilePath, [string]$FileName, [string]$Source)
+    
+    $suspiciousReasons = @()
+    
+    if ((Get-Item $FilePath -ErrorAction SilentlyContinue) -is [System.IO.DirectoryInfo]) {
+        return @()
+    }
+    
+    # Check for suspicious keywords (HIGH PRIORITY)
+    foreach ($keyword in $SuspiciousKeywords) {
+        if ($FileName -match [regex]::Escape($keyword)) {
+            $suspiciousReasons += "SUSPICIOUS_KEYWORD_$($keyword.ToUpper())"
+        }
+    }
+    
+    # Check for spoofed extensions ONLY for BAM sources
+    if ($Source -eq "BAM" -or $Source -eq "BAM_Recent") {
+        $extension = [System.IO.Path]::GetExtension($FilePath).ToLower()
+        if ($extension -in $SpoofedExtensions) {
+            $suspiciousReasons += "SPOOFED_EXTENSION_$($extension.ToUpper().Replace('.',''))"
+        }
+    }
+    
+    # Check for double extensions
+    if ($FileName -match '\.[^\.]+\.(exe|dll|scr|bat|cmd|ps1|vbs|js)$') {
+        $suspiciousReasons += "DOUBLE_EXTENSION"
+    }
+    
+    # Check for suspicious locations
+    $suspiciousPaths = @(
+        "\\temp\\", "\\tmp\\", "\\users\\.*\\appdata\\", "\\programdata\\", 
+        "\\windows\\temp\\", "\\recycle", "\\prefetch\\", "\\downloads\\"
+    )
+    foreach ($pathPattern in $suspiciousPaths) {
+        if ($FilePath -match $pathPattern) {
+            $suspiciousReasons += "SUSPICIOUS_LOCATION"
+            break
+        }
+    }
+    
+    return $suspiciousReasons
+}
+
+function Get-SuspiciousPriority {
+    param([string]$SuspiciousActivity, [string]$FileName)
+    
+    $priority = 0
+    
+    # Highest priority: suspicious keywords
+    if ($SuspiciousActivity -match "SUSPICIOUS_KEYWORD_") {
+        $priority += 1000
+    }
+    
+    # High priority: spoofed extensions (only for BAM)
+    if ($SuspiciousActivity -match "SPOOFED_EXTENSION_") {
+        $priority += 500
+    }
+    
+    # Medium priority: unsigned/invalid signatures
+    if ($SuspiciousActivity -match "Not Signed|Invalid|SUSPICIOUS_SIGNER") {
+        $priority += 100
+    }
+    
+    # Lower priority: other suspicious activities
+    if ($SuspiciousActivity -ne "N/A") {
+        $priority += 50
+    }
+    
+    # Bonus for non-exe files with suspicious activity
+    if ($FileName -notmatch "\.exe$" -and $SuspiciousActivity -ne "N/A") {
+        $priority += 25
+    }
+    
+    return $priority
+}
+
+$USN_REASON_DATA_OVERWRITE = 0x00000001
+$USN_REASON_DATA_EXTEND = 0x00000002
+$USN_REASON_DATA_TRUNCATION = 0x00000004
+$USN_REASON_NAMED_DATA_OVERWRITE = 0x00000010
+$USN_REASON_NAMED_DATA_EXTEND = 0x00000020
+$USN_REASON_NAMED_DATA_TRUNCATION = 0x00000040
+$USN_REASON_FILE_CREATE = 0x00000100
+$USN_REASON_FILE_DELETE = 0x00000200
+$USN_REASON_EA_CHANGE = 0x00000400
+$USN_REASON_SECURITY_CHANGE = 0x00000800
+$USN_REASON_RENAME_OLD_NAME = 0x00001000
+$USN_REASON_RENAME_NEW_NAME = 0x00002000
+$USN_REASON_INDEXABLE_CHANGE = 0x00004000
+$USN_REASON_BASIC_INFO_CHANGE = 0x00008000
+$USN_REASON_HARD_LINK_CHANGE = 0x00010000
+$USN_REASON_COMPRESSION_CHANGE = 0x00020000
+$USN_REASON_ENCRYPTION_CHANGE = 0x00040000
+$USN_REASON_OBJECT_ID_CHANGE = 0x00080000
+$USN_REASON_REPARSE_POINT_CHANGE = 0x00100000
+$USN_REASON_STREAM_CHANGE = 0x00200000
+$USN_REASON_TRANSACTED_CHANGE = 0x00400000
+$USN_REASON_INTEGRITY_CHANGE = 0x00800000
+$USN_REASON_DESIRED_STORAGE_CLASS_CHANGE = 0x01000000
+$USN_REASON_CLOSE = 0x80000000
+
+function Get-USNReasonDescription {
+    param([uint32]$Reason)
+    
+    $reasons = @()
+    
+    if ($Reason -band $USN_REASON_DATA_OVERWRITE) { $reasons += "DATA_OVERWRITE" }
+    if ($Reason -band $USN_REASON_DATA_EXTEND) { $reasons += "DATA_EXTEND" }
+    if ($Reason -band $USN_REASON_DATA_TRUNCATION) { $reasons += "DATA_TRUNCATION" }
+    if ($Reason -band $USN_REASON_NAMED_DATA_OVERWRITE) { $reasons += "NAMED_DATA_OVERWRITE" }
+    if ($Reason -band $USN_REASON_NAMED_DATA_EXTEND) { $reasons += "NAMED_DATA_EXTEND" }
+    if ($Reason -band $USN_REASON_NAMED_DATA_TRUNCATION) { $reasons += "NAMED_DATA_TRUNCATION" }
+    if ($Reason -band $USN_REASON_FILE_CREATE) { $reasons += "FILE_CREATE" }
+    if ($Reason -band $USN_REASON_FILE_DELETE) { $reasons += "FILE_DELETE" }
+    if ($Reason -band $USN_REASON_EA_CHANGE) { $reasons += "EA_CHANGE" }
+    if ($Reason -band $USN_REASON_SECURITY_CHANGE) { $reasons += "SECURITY_CHANGE" }
+    if ($Reason -band $USN_REASON_RENAME_OLD_NAME) { $reasons += "RENAME_OLD_NAME" }
+    if ($Reason -band $USN_REASON_RENAME_NEW_NAME) { $reasons += "RENAME_NEW_NAME" }
+    if ($Reason -band $USN_REASON_INDEXABLE_CHANGE) { $reasons += "INDEXABLE_CHANGE" }
+    if ($Reason -band $USN_REASON_BASIC_INFO_CHANGE) { $reasons += "BASIC_INFO_CHANGE" }
+    if ($Reason -band $USN_REASON_HARD_LINK_CHANGE) { $reasons += "HARD_LINK_CHANGE" }
+    if ($Reason -band $USN_REASON_COMPRESSION_CHANGE) { $reasons += "COMPRESSION_CHANGE" }
+    if ($Reason -band $USN_REASON_ENCRYPTION_CHANGE) { $reasons += "ENCRYPTION_CHANGE" }
+    if ($Reason -band $USN_REASON_OBJECT_ID_CHANGE) { $reasons += "OBJECT_ID_CHANGE" }
+    if ($Reason -band $USN_REASON_REPARSE_POINT_CHANGE) { $reasons += "REPARSE_POINT_CHANGE" }
+    if ($Reason -band $USN_REASON_STREAM_CHANGE) { $reasons += "STREAM_CHANGE" }
+    if ($Reason -band $USN_REASON_TRANSACTED_CHANGE) { $reasons += "TRANSACTED_CHANGE" }
+    if ($Reason -band $USN_REASON_CLOSE) { $reasons += "CLOSE" }
+    
+    return ($reasons -join ", ")
+}
+
+function Get-USNJournalEntries {
+    Write-Log "Scanning USN Journal for suspicious file modifications..."
+    $results = @()
+    
+    try {
+        $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 }
+        
+        foreach ($drive in $drives) {
+            Write-Log "Scanning USN Journal on drive: $($drive.Root)"
+            
+            try {
+                $driveLetter = $drive.Root.TrimEnd('\')
+                
+                Write-Log "Attempting to read USN Journal from $driveLetter using fsutil..."
+                
+                $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+                $processStartInfo.FileName = "fsutil.exe"
+                $processStartInfo.Arguments = "usn readJournal $driveLetter"
+                $processStartInfo.RedirectStandardOutput = $true
+                $processStartInfo.RedirectStandardError = $true
+                $processStartInfo.UseShellExecute = $false
+                $processStartInfo.CreateNoWindow = $true
+                
+                $process = New-Object System.Diagnostics.Process
+                $process.StartInfo = $processStartInfo
+                $process.Start() | Out-Null
+                $output = $process.StandardOutput.ReadToEnd()
+                $errorOutput = $process.StandardError.ReadToEnd()
+                $process.WaitForExit()
+                
+                if (-not [string]::IsNullOrEmpty($errorOutput)) {
+                    Write-Log "Error reading USN Journal: $errorOutput"
+                    continue
+                }
+                
+                if ([string]::IsNullOrEmpty($output)) {
+                    Write-Log "No USN journal data returned from $driveLetter"
+                    continue
+                }
+                
+                Write-Log "Raw USN data length: $($output.Length) characters"
+                
+                $records = $output -split "USN_RECORD ------"
+                
+                Write-Log "Found $($records.Length) potential USN records"
+                
+                foreach ($record in $records) {
+                    try {
+                        if ([string]::IsNullOrWhiteSpace($record)) { continue }
+                        
+                        $fileName = $null
+                        $reasonHex = $null
+                        $timestamp = $null
+                        
+                        $lines = $record -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+                        
+                        foreach ($line in $lines) {
+                            $trimmedLine = $line.Trim()
+                            
+                            if ($trimmedLine -match "File Name\s*:\s*(.+)") {
+                                $fileName = $matches[1].Trim()
+                            } elseif ($trimmedLine -match "Name\s*:\s*(.+)") {
+                                $fileName = $matches[1].Trim()
+                            }
+                            
+                            if ($trimmedLine -match "Reason\s*:\s*0x([0-9a-fA-F]+)") {
+                                $reasonHex = $matches[1].Trim()
+                            }
+                            
+                            if ($trimmedLine -match "Time Stamp\s*:\s*(.+)") {
+                                $timestamp = $matches[1].Trim()
+                            }
+                        }
+                        
+                        if ($fileName -and $reasonHex) {
+                            $fullPath = Join-Path $drive.Root $fileName
+                            
+                            if ((Get-Item $fullPath -ErrorAction SilentlyContinue) -is [System.IO.DirectoryInfo]) {
+                                continue
+                            }
+                            
+                            Write-Log "Processing USN entry: $fileName with reason 0x$reasonHex"
+                            
+                            $reason = [Convert]::ToUInt32($reasonHex, 16)
+                            $reasonDesc = Get-USNReasonDescription -Reason $reason
+                            
+                            $isSuspicious = $false
+                            $suspiciousReasons = @()
+                            
+                            $fileSuspiciousReasons = Test-SuspiciousFile -FilePath $fullPath -FileName $fileName -Source "USN_Journal"
+                            if ($fileSuspiciousReasons.Count -gt 0) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += $fileSuspiciousReasons
+                            }
+                            
+                            if ($reason -band $USN_REASON_HARD_LINK_CHANGE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "HARD_LINK_CHANGE"
+                            }
+                            
+                            if ($reason -band $USN_REASON_ENCRYPTION_CHANGE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "ENCRYPTION_CHANGE"
+                            }
+                            
+                            if ($reason -band $USN_REASON_REPARSE_POINT_CHANGE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "REPARSE_POINT_CHANGE"
+                            }
+                            
+                            $currentBootActivity = $false
+                            if (($reason -band $USN_REASON_DATA_EXTEND) -or ($reason -band $USN_REASON_DATA_TRUNCATION)) {
+                                if ($reason -band $USN_REASON_CLOSE) {
+                                    try {
+                                        $usnTime = [DateTime]::Parse($timestamp)
+                                        if ($usnTime -gt $BootTime) {
+                                            $isSuspicious = $true
+                                            $suspiciousReasons += "DATA_EXTEND_TRUNCATE_CLOSE_CURRENT_BOOT"
+                                            $currentBootActivity = $true
+                                        }
+                                    }
+                                    catch {
+                                        $isSuspicious = $true
+                                        $suspiciousReasons += "DATA_EXTEND_TRUNCATE_CLOSE"
+                                    }
+                                }
+                            }
+                            
+                            if ($reason -band $USN_REASON_FILE_CREATE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_CREATED"
+                            }
+                            
+                            if ($reason -band $USN_REASON_FILE_DELETE) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_DELETED"
+                            }
+                            
+                            if (($reason -band $USN_REASON_RENAME_OLD_NAME) -or 
+                                ($reason -band $USN_REASON_RENAME_NEW_NAME)) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_RENAMED"
+                            }
+                            
+                            if (($reason -band $USN_REASON_FILE_CREATE) -and 
+                                ($reason -band $USN_REASON_DATA_OVERWRITE)) {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "FILE_REPLACED"
+                            }
+                            
+                            if ($fileName -match "\.(exe|dll|scr|bat|cmd|ps1|vbs|js|msi|com|pif|jar|wsf|cpl|reg|inf|sys)$") {
+                                $isSuspicious = $true
+                                $suspiciousReasons += "EXECUTABLE_FILE"
+                            }
+                            
+                            if ($isSuspicious -and $suspiciousReasons.Count -gt 0) {
+                                $fileExists = Test-Path $fullPath -ErrorAction SilentlyContinue
+                                $signature = if ($fileExists -and $fullPath -match "\.(exe|dll|sys)$") { 
+                                    Get-DigitalSignature -FilePath $fullPath 
+                                } else { 
+                                    "N/A" 
+                                }
+                                
+                                if (-not $timestamp -or $timestamp -eq "N/A") {
+                                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                                }
+                                
+                                $result = [PSCustomObject]@{
+                                    Source = "USN_Journal"
+                                    FullPath = $fullPath
+                                    Timestamp = $timestamp
+                                    FileExists = $fileExists
+                                    Signature = $signature
+                                    ArtifactFile = "$driveLetter\USN_Journal"
+                                    SuspiciousActivity = ($suspiciousReasons -join " | ")
+                                    USNReason = $reasonDesc
+                                    RawReason = "0x$reasonHex"
+                                }
+                                
+                                if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $currentBootActivity -or $suspiciousReasons -match "HARD_LINK_CHANGE|ENCRYPTION_CHANGE|REPARSE_POINT_CHANGE") {
+                                    $results += $result
+                                }
+                                
+                                Write-Log "Logged suspicious USN entry: $fileName - $($suspiciousReasons -join ', ')"
+                            }
+                        }
+                    }
+                    catch {
+                        Write-Log "Error parsing individual USN record: $($_.Exception.Message)"
+                    }
+                }
+                
+                Write-Log "Performing alternative file system scan on $driveLetter..."
+                $recentFiles = Get-ChildItem -Path "$driveLetter\" -Recurse -File -ErrorAction SilentlyContinue | 
+                              Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-24) } |
+                              Select-Object -First 100
+                
+                foreach ($file in $recentFiles) {
+                    $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "Recent_File_Scan"
+                    if ($suspiciousReasons.Count -gt 0 -or $file.FullName -match "\.(exe|dll|scr|bat|cmd|ps1|vbs)$") {
+                        $signature = Get-DigitalSignature -FilePath $file.FullName
+                        
+                        if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature") {
+                            $result = [PSCustomObject]@{
+                                Source = "Recent_File_Scan"
+                                FullPath = $file.FullName
+                                Timestamp = $file.LastWriteTime
+                                FileExists = $true
+                                Signature = $signature
+                                ArtifactFile = "File_System"
+                                SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "RECENTLY_MODIFIED_EXECUTABLE" }
+                                USNReason = "N/A"
+                                RawReason = "N/A"
+                            }
+                            $results += $result
+                        }
+                    }
+                }
+                
+            }
+            catch {
+                Write-Log "Error accessing USN Journal on drive $($drive.Root): $($_.Exception.Message)"
+            }
+        }
+    }
+    catch {
+        Write-Log "Error scanning USN Journal: $($_.Exception.Message)"
+    }
+    
+    Write-Log "USN Journal scan completed. Found $($results.Count) suspicious entries."
+    return $results
+}
+
+function Get-PrefetchFiles {
+    Write-Log "Scanning Prefetch files..."
+    $prefetchPath = "$env:SystemRoot\Prefetch"
+    $results = @()
+    
+    try {
+        $prefetchFiles = Get-ChildItem -Path $prefetchPath -Filter "*.pf" -ErrorAction SilentlyContinue
+        foreach ($pf in $prefetchFiles) {
+            try {
+                $exeName = $pf.Name.Split('-')[0] + ".exe"
+                
+                $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 }
+                foreach ($drive in $drives) {
+                    $potentialPaths = @(
+                        "$($drive.Root)$exeName",
+                        "$($drive.Root)Windows\System32\$exeName",
+                        "$($drive.Root)Program Files\*\$exeName",
+                        "$($drive.Root)Program Files (x86)\*\$exeName",
+                        "$($drive.Root)Users\*\AppData\**\$exeName",
+                        "$($drive.Root)Windows\Temp\**\$exeName",
+                        "$($drive.Root)Temp\**\$exeName"
+                    )
+                    
+                    foreach ($pattern in $potentialPaths) {
+                        $foundFiles = Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue
+                        foreach ($file in $foundFiles) {
+                            $fileExists = Test-Path $file.FullName
+                            $signature = if ($fileExists) { Get-DigitalSignature -FilePath $file.FullName } else { "N/A" }
+                            $lastRunTime = $pf.LastWriteTime
+                            
+                            $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "Prefetch"
+                            
+                            if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $suspiciousReasons.Count -gt 0) {
+                                $result = [PSCustomObject]@{
+                                    Source = "Prefetch"
+                                    FullPath = $file.FullName
+                                    Timestamp = $lastRunTime
+                                    FileExists = $fileExists
+                                    Signature = $signature
+                                    ArtifactFile = $pf.FullName
+                                    SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
+                                    USNReason = "N/A"
+                                    RawReason = "N/A"
+                                }
+                                $results += $result
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-Log "Error processing prefetch file $($pf.Name): $($_.Exception.Message)"
+            }
+        }
+    }
+    catch {
+        Write-Log "Error accessing prefetch directory: $($_.Exception.Message)"
+    }
+    
+    return $results
+}
+
+function Get-ShimCacheEntries {
+    Write-Log "Scanning ShimCache entries..."
+    $results = @()
+    
+    try {
+        $shimPaths = @(
+            "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\AppCompatCache",
+            "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\AppCompatibility"
+        )
+        
+        foreach ($regPath in $shimPaths) {
+            try {
+                $cache = Get-ItemProperty -Path $regPath -Name "AppCompatCache" -ErrorAction SilentlyContinue
+                if ($cache) {
+                    $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 }
+                    
+                    foreach ($drive in $drives) {
+                        $patterns = @(
+                            "$($drive.Root)*.exe",
+                            "$($drive.Root)Program Files\**\*.exe",
+                            "$($drive.Root)Program Files (x86)\**\*.exe",
+                            "$($drive.Root)Users\**\*.exe",
+                            "$($drive.Root)Windows\Temp\**\*.exe",
+                            "$($drive.Root)Temp\**\*.exe"
+                        )
+                        
+                        foreach ($pattern in $patterns) {
+                            $files = Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue | Select-Object -First 50
+                            foreach ($file in $files) {
+                                $fileExists = Test-Path $file.FullName
+                                $signature = if ($fileExists) { Get-DigitalSignature -FilePath $file.FullName } else { "N/A" }
+                                
+                                $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "ShimCache"
+                                
+                                if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $suspiciousReasons.Count -gt 0) {
+                                    $result = [PSCustomObject]@{
+                                        Source = "ShimCache"
+                                        FullPath = $file.FullName
+                                        Timestamp = "N/A"
+                                        FileExists = $fileExists
+                                        Signature = $signature
+                                        ArtifactFile = $regPath
+                                        SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
+                                        USNReason = "N/A"
+                                        RawReason = "N/A"
+                                    }
+                                    $results += $result
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                $errorMsg = "Error accessing registry path $regPath : $($_.Exception.Message)"
+                Write-Log $errorMsg
+            }
+        }
+    }
+    catch {
+        Write-Log "Error scanning ShimCache: $($_.Exception.Message)"
+    }
+    
+    return $results
+}
+
+function Get-AmCacheEntries {
+    Write-Log "Scanning AmCache hive..."
+    $results = @()
+    
+    try {
+        $amcachePath = "$env:SystemRoot\AppCompat\Programs\Amcache.hve"
+        if (Test-Path $amcachePath) {
+            $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 }
+            
+            foreach ($drive in $drives) {
+                $searchPaths = @(
+                    "$($drive.Root)Users\*\AppData\Local\Temp\*.exe",
+                    "$($drive.Root)Users\*\Downloads\*.exe",
+                    "$($drive.Root)Windows\Temp\*.exe",
+                    "$($drive.Root)*.exe",
+                    "$($drive.Root)Users\*\AppData\Roaming\*.exe",
+                    "$($drive.Root)ProgramData\*.exe"
+                )
+                
+                foreach ($pattern in $searchPaths) {
+                    $files = Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue | 
+                            Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-30) } |
+                            Select-Object -First 30
+                    
+                    foreach ($file in $files) {
+                        $fileExists = Test-Path $file.FullName
+                        $signature = if ($fileExists) { Get-DigitalSignature -FilePath $file.FullName } else { "N/A" }
+                        
+                        $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "AmCache"
+                        
+                        if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $suspiciousReasons.Count -gt 0) {
+                            $result = [PSCustomObject]@{
+                                Source = "AmCache"
+                                FullPath = $file.FullName
+                                Timestamp = $file.LastWriteTime
+                                FileExists = $fileExists
+                                Signature = $signature
+                                ArtifactFile = $amcachePath
+                                SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
+                                USNReason = "N/A"
+                                RawReason = "N/A"
+                            }
+                            $results += $result
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "Error scanning AmCache: $($_.Exception.Message)"
+    }
+    
+    return $results
+}
+
+function Get-BAMEntries {
+    Write-Log "Scanning BAM (Background Activity Moderator) entries..."
+    $results = @()
+    
+    try {
+        $bamPaths = @(
+            "HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings",
+            "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings"
+        )
+        
+        foreach ($bamPath in $bamPaths) {
+            try {
+                if (Test-Path $bamPath) {
+                    $users = Get-ChildItem -Path $bamPath -ErrorAction SilentlyContinue
+                    foreach ($user in $users) {
+                        $userPath = Join-Path $bamPath $user.PSChildName
+                        $entries = Get-ChildItem -Path $userPath -ErrorAction SilentlyContinue
+                        
+                        foreach ($entry in $entries) {
+                            try {
+                                $entryValue = Get-ItemProperty -Path $entry.PSPath -ErrorAction SilentlyContinue
+                                if ($entryValue) {
+                                    $propertyNames = $entryValue.PSObject.Properties | Where-Object { 
+                                        $_.Name -notlike "PS*" -and $_.Name -ne "Path" 
+                                    }
+                                    
+                                    foreach ($prop in $propertyNames) {
+                                        $binaryData = $prop.Value
+                                        if ($binaryData -is [byte[]] -and $binaryData.Length -gt 0) {
+                                            $hexString = [BitConverter]::ToString($binaryData)
+                                            $asciiString = [System.Text.Encoding]::ASCII.GetString($binaryData)
+                                            
+                                            if ($asciiString -match "[a-zA-Z]:\\[^\x00]+\.(exe|dll|scr|bat|cmd|ps1)") {
+                                                $filePath = $matches[0]
+                                                if (Test-Path $filePath -ErrorAction SilentlyContinue) {
+                                                    $file = Get-Item $filePath -ErrorAction SilentlyContinue
+                                                    if ($file -and -not ($file -is [System.IO.DirectoryInfo])) {
+                                                        $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "BAM"
+                                                        $signature = Get-DigitalSignature -FilePath $file.FullName
+                                                        
+                                                        if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $suspiciousReasons.Count -gt 0) {
+                                                            $result = [PSCustomObject]@{
+                                                                Source = "BAM"
+                                                                FullPath = $file.FullName
+                                                                Timestamp = $file.LastWriteTime
+                                                                FileExists = $true
+                                                                Signature = $signature
+                                                                ArtifactFile = $entry.PSPath
+                                                                SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
+                                                                USNReason = "N/A"
+                                                                RawReason = "N/A"
+                                                            }
+                                                            $results += $result
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch {
+                                Write-Log "Error processing BAM entry: $($_.Exception.Message)"
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-Log "Error accessing BAM path ${bamPath}: $($_.Exception.Message)"
+            }
+        }
+        
+        $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 }
+        foreach ($drive in $drives) {
+            $recentExecutables = Get-ChildItem -Path "$($drive.Root)" -Recurse -Include "*.exe", "*.dll" -File -ErrorAction SilentlyContinue | 
+                                Where-Object { $_.LastAccessTime -gt (Get-Date).AddDays(-7) } |
+                                Select-Object -First 50
+                                
+            foreach ($file in $recentExecutables) {
+                $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "BAM_Recent"
+                if ($suspiciousReasons.Count -gt 0) {
+                    $signature = Get-DigitalSignature -FilePath $file.FullName
+                    
+                    if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $suspiciousReasons.Count -gt 0) {
+                        $result = [PSCustomObject]@{
+                            Source = "BAM_Recent"
+                            FullPath = $file.FullName
+                            Timestamp = $file.LastAccessTime
+                            FileExists = $true
+                            Signature = $signature
+                            ArtifactFile = "Recent_Access"
+                            SuspiciousActivity = ($suspiciousReasons -join " | ")
+                            USNReason = "N/A"
+                            RawReason = "N/A"
+                        }
+                        $results += $result
+                    }
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "Error scanning BAM: $($_.Exception.Message)"
+    }
+    
+    return $results
+}
+
+function Get-ActivityCache {
+    Write-Log "Scanning for ActivityCache/RecentFileCache..."
+    $results = @()
+    
+    try {
+        $recentCache = "$env:LocalAppData\ConnectedDevicesPlatform\*\ActivitiesCache.db"
+        $cacheFiles = Get-ChildItem -Path $recentCache -ErrorAction SilentlyContinue
+        
+        foreach ($cacheFile in $cacheFiles) {
+            try {
+                $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 }
+                
+                foreach ($drive in $drives) {
+                    $files = Get-ChildItem -Path "$($drive.Root)*.exe" -File -ErrorAction SilentlyContinue |
+                            Where-Object { $_.LastAccessTime -gt (Get-Date).AddDays(-60) } |
+                            Select-Object -First 40
+                    
+                    foreach ($file in $files) {
+                        $fileExists = Test-Path $file.FullName
+                        $signature = if ($fileExists) { Get-DigitalSignature -FilePath $file.FullName } else { "N/A" }
+                        
+                        $suspiciousReasons = Test-SuspiciousFile -FilePath $file.FullName -FileName $file.Name -Source "ActivityCache"
+                        
+                        if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER|Error checking signature" -or $suspiciousReasons.Count -gt 0) {
+                            $result = [PSCustomObject]@{
+                                Source = "ActivityCache"
+                                FullPath = $file.FullName
+                                Timestamp = $file.LastAccessTime
+                                FileExists = $fileExists
+                                Signature = $signature
+                                ArtifactFile = $cacheFile.FullName
+                                SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
+                                USNReason = "N/A"
+                                RawReason = "N/A"
+                            }
+                            $results += $result
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-Log "Error processing cache file $($cacheFile.FullName): $($_.Exception.Message)"
+            }
+        }
+    }
+    catch {
+        Write-Log "Error scanning ActivityCache: $($_.Exception.Message)"
+    }
+    
+    return $results
+}
+
+function Show-ResultsGUI {
+    param(
+        [array]$Results
+    )
+    
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Suspicious Executed Files Scan Results (All Drives)"
+    $form.Size = New-Object System.Drawing.Size(1400, 700)
+    $form.StartPosition = "CenterScreen"
+    $form.MaximizeBox = $true
+    $form.MinimizeBox = $true
+
+    $dataGridView = New-Object System.Windows.Forms.DataGridView
+    $dataGridView.Location = New-Object System.Drawing.Point(10, 10)
+    $dataGridView.Size = New-Object System.Drawing.Size(1360, 550)
+    $dataGridView.AutoSizeColumnsMode = "Fill"
+    $dataGridView.SelectionMode = "FullRowSelect"
+    $dataGridView.ReadOnly = $true
+    $dataGridView.AllowUserToAddRows = $false
+    $dataGridView.AllowUserToDeleteRows = $false
+    $dataGridView.RowHeadersVisible = $false
+
+    $columns = @(
+        @{Name="Timestamp"; HeaderText="Timestamp"},
+        @{Name="FilePath"; HeaderText="File Path"},
+        @{Name="Signature"; HeaderText="Signature"},
+        @{Name="FileStatus"; HeaderText="File Status"},
+        @{Name="Source"; HeaderText="Artifact Source"},
+        @{Name="SuspiciousActivity"; HeaderText="Suspicious Activity"},
+        @{Name="USNReason"; HeaderText="USN Reason"}
+    )
+
+    foreach ($column in $columns) {
+        $col = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+        $col.Name = $column.Name
+        $col.HeaderText = $column.HeaderText
+        $dataGridView.Columns.Add($col) | Out-Null
+    }
+
+    $dataGridView.Add_CellFormatting({
+        param($sender, $e)
+        
+        if ($e.ColumnIndex -eq 5) {
+            $activity = $sender.Rows[$e.RowIndex].Cells[5].Value
+            if ($activity -ne "N/A" -and $activity -ne $null) {
+                if ($activity -match "SUSPICIOUS_KEYWORD_") {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::Red
+                    $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                } else {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::LightCoral
+                    $e.CellStyle.ForeColor = [System.Drawing.Color]::DarkRed
+                }
+            }
+        }
+        
+        if ($e.ColumnIndex -eq 2) {
+            $signature = $sender.Rows[$e.RowIndex].Cells[2].Value
+            if ($signature -match "Not Signed|Invalid|SUSPICIOUS_SIGNER") {
+                $e.CellStyle.BackColor = [System.Drawing.Color]::LightYellow
+                $e.CellStyle.ForeColor = [System.Drawing.Color]::DarkOrange
+            }
+        }
+        
+        if ($e.ColumnIndex -eq 1) {
+            $filePath = $sender.Rows[$e.RowIndex].Cells[1].Value
+            if ($filePath -notmatch "\.exe$") {
+                $e.CellStyle.BackColor = [System.Drawing.Color]::LightPink
+                $e.CellStyle.ForeColor = [System.Drawing.Color]::DarkRed
+            }
+        }
+    })
+
+    # Sort results by priority (keywords first)
+    $sortedResults = $Results | Sort-Object { 
+        Get-SuspiciousPriority -SuspiciousActivity $_.SuspiciousActivity -FileName $_.FullPath
+    } -Descending
+
+    foreach ($result in $sortedResults) {
+        $timestamp = if ($result.Timestamp -eq "N/A") { "N/A" } else { 
+            try {
+                if ($result.Timestamp -is [datetime]) {
+                    $result.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")
+                } else {
+                    $result.Timestamp
+                }
+            }
+            catch {
+                "N/A"
+            }
+        }
+        
+        $fileStatus = if ($result.FileExists) { "File is still present" } else { "File is not present" }
+        
+        $signature = $result.Signature
+        if ($signature.Length -gt 50) {
+            $signature = $signature.Substring(0, 47) + "..."
+        }
+
+        $row = New-Object System.Windows.Forms.DataGridViewRow
+        $row.CreateCells($dataGridView, $timestamp, $result.FullPath, $signature, $fileStatus, $result.Source, $result.SuspiciousActivity, $result.USNReason)
+        $dataGridView.Rows.Add($row) | Out-Null
+    }
+
+    $summaryLabel = New-Object System.Windows.Forms.Label
+    $summaryLabel.Location = New-Object System.Drawing.Point(10, 570)
+    $summaryLabel.Size = New-Object System.Drawing.Size(1000, 20)
+    $suspiciousCount = ($Results | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
+    $nonExeCount = ($Results | Where-Object { $_.FullPath -notmatch "\.exe$" }).Count
+    $unsignedCount = ($Results | Where-Object { $_.Signature -match "Not Signed|Invalid" }).Count
+    $suspiciousSignerCount = ($Results | Where-Object { $_.Signature -match "SUSPICIOUS_SIGNER" }).Count
+    $keywordCount = ($Results | Where-Object { $_.SuspiciousActivity -match "SUSPICIOUS_KEYWORD_" }).Count
+    $spoofedExtensionCount = ($Results | Where-Object { $_.SuspiciousActivity -match "SPOOFED_EXTENSION_" }).Count
+    $specialUSNCount = ($Results | Where-Object { $_.SuspiciousActivity -match "HARD_LINK_CHANGE|ENCRYPTION_CHANGE|REPARSE_POINT_CHANGE|DATA_EXTEND_TRUNCATE_CLOSE" }).Count
+    $summaryLabel.Text = "Suspicious files: $($Results.Count) | Keywords: $keywordCount | Non-.exe: $nonExeCount | Unsigned: $unsignedCount | Spoofed Ext: $spoofedExtensionCount | Suspicious Signers: $suspiciousSignerCount | Special USN: $specialUSNCount"
+
+    $closeButton = New-Object System.Windows.Forms.Button
+    $closeButton.Location = New-Object System.Drawing.Point(1250, 570)
+    $closeButton.Size = New-Object System.Drawing.Size(120, 30)
+    $closeButton.Text = "Close"
+    $closeButton.Add_Click({ $form.Close() })
+
+    $exportButton = New-Object System.Windows.Forms.Button
+    $exportButton.Location = New-Object System.Drawing.Point(1120, 570)
+    $exportButton.Size = New-Object System.Drawing.Size(120, 30)
+    $exportButton.Text = "Export to CSV"
+    $exportButton.Add_Click({
+        $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+        $saveFileDialog.Filter = "CSV files (*.csv)|*.csv"
+        $saveFileDialog.FileName = "SuspiciousFiles_Export_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+        if ($saveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $sortedResults | Export-Csv -Path $saveFileDialog.FileName -NoTypeInformation
+            [System.Windows.Forms.MessageBox]::Show("Data exported to: $($saveFileDialog.FileName)", "Export Complete", "OK", "Information")
+        }
+    })
+
+    $form.Controls.Add($dataGridView)
+    $form.Controls.Add($summaryLabel)
+    $form.Controls.Add($closeButton)
+    $form.Controls.Add($exportButton)
+
+    $form.Add_Shown({$form.Activate()})
+    $form.ShowDialog() | Out-Null
+}
+
+Write-Log "Starting suspicious executed files scan on ALL drives including C:..."
+Write-Log "Output file: $OutputFile"
+Write-Log "Suspicious keywords: $($SuspiciousKeywords -join ', ')"
+Write-Log "Suspicious signers: $($SuspiciousSigners -join ', ')"
+
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+if (-not $isAdmin) {
+    Write-Warning "Not running as administrator. Some artifacts may not be accessible."
+}
+
+if (Test-Path $OutputFile) {
+    try {
+        Remove-Item $OutputFile -Force
+        Write-Log "Cleared existing output file."
+    }
+    catch {
+        Write-Log "Warning: Could not clear existing output file: $($_.Exception.Message)"
+    }
+}
+
+Write-Log "Collecting data from various artifacts..."
+
+$Artifacts += Get-PrefetchFiles
+$Artifacts += Get-ShimCacheEntries
+$Artifacts += Get-AmCacheEntries
+$Artifacts += Get-ActivityCache
+$Artifacts += Get-BAMEntries
+$Artifacts += Get-USNJournalEntries
+
+$groupedResults = $Artifacts | Group-Object FullPath, Source | ForEach-Object {
+    $_.Group | Select-Object -First 1
+}
+
+Write-Log "Writing results to output file..."
+
+$header = "Source`tFullPath`tTimestamp`tFileExists`tSignature`tArtifactFile`tSuspiciousActivity`tUSNReason`tRawReason"
+Add-Content -Path $OutputFile -Value "SUSPICIOUS EXECUTED FILES SCAN REPORT (ALL DRIVES)"
+Add-Content -Path $OutputFile -Value "Generated: $(Get-Date)"
+Add-Content -Path $OutputFile -Value "Scan Target: All drives including C:"
+Add-Content -Path $OutputFile -Value "Suspicious Keywords: $($SuspiciousKeywords -join ', ')"
+Add-Content -Path $OutputFile -Value "Suspicious Signers: $($SuspiciousSigners -join ', ')"
+Add-Content -Path $OutputFile -Value ("=" * 80)
+Add-Content -Path $OutputFile -Value $header
+
+# Sort results by priority for the output file as well
+$sortedGroupedResults = $groupedResults | Sort-Object { 
+    Get-SuspiciousPriority -SuspiciousActivity $_.SuspiciousActivity -FileName $_.FullPath
+} -Descending
+
+foreach ($result in $sortedGroupedResults) {
+    $line = "$($result.Source)`t$($result.FullPath)`t$($result.Timestamp)`t$($result.FileExists)`t$($result.Signature)`t$($result.ArtifactFile)`t$($result.SuspiciousActivity)`t$($result.USNReason)`t$($result.RawReason)"
+    Add-Content -Path $OutputFile -Value $line
+}
+
+$suspiciousCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
+$nonExeCount = ($groupedResults | Where-Object { $_.FullPath -notmatch "\.exe$" }).Count
+$unsignedCount = ($groupedResults | Where-Object { $_.Signature -match "Not Signed|Invalid" }).Count
+$suspiciousSignerCount = ($groupedResults | Where-Object { $_.Signature -match "SUSPICIOUS_SIGNER" }).Count
+$keywordCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -match "SUSPICIOUS_KEYWORD_" }).Count
+$spoofedExtensionCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -match "SPOOFED_EXTENSION_" }).Count
+$specialUSNCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -match "HARD_LINK_CHANGE|ENCRYPTION_CHANGE|REPARSE_POINT_CHANGE|DATA_EXTEND_TRUNCATE_CLOSE" }).Count
+
+Write-Log "Scan completed!"
+Write-Log "Total suspicious files found: $($groupedResults.Count)"
+Write-Log "Files with suspicious keywords: $keywordCount"
+Write-Log "Non-.exe files: $nonExeCount"
+Write-Log "Unsigned files: $unsignedCount"
+Write-Log "Suspicious signer files: $suspiciousSignerCount"
+Write-Log "Spoofed extension files: $spoofedExtensionCount"
+Write-Log "Special USN activities: $specialUSNCount"
+Write-Log "Results saved to: $OutputFile"
+
+Write-Host "`n> SCAN COMPLETED <" -ForegroundColor Green
+Write-Host "Opening results GUI..." -ForegroundColor Yellow
+Write-Host "Suspicious files: $($groupedResults.Count)" -ForegroundColor Yellow
+Write-Host "Files with keywords: $keywordCount" -ForegroundColor Red
+Write-Host "Non-.exe files: $nonExeCount" -ForegroundColor Red
+Write-Host "Unsigned files: $unsignedCount" -ForegroundColor Red
+Write-Host "Spoofed extensions: $spoofedExtensionCount" -ForegroundColor Red
+Write-Host "Suspicious signer files: $suspiciousSignerCount" -ForegroundColor Red
+Write-Host "Special USN activities: $specialUSNCount" -ForegroundColor Red
+Write-Host "File also saved to: C:\Screenshare\output.txt" -ForegroundColor Cyan
+
+Show-ResultsGUI -Results $groupedResults
