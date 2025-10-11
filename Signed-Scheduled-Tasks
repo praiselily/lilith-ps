@@ -1,0 +1,78 @@
+Start-Sleep -Seconds 1
+Write-Host "Optimized by Lily (the BEST sser****)" -ForegroundColor Red
+Write-Host "Analyzing scheduled tasks..." -ForegroundColor Red
+Start-Sleep -Seconds 1
+
+function Test-FileSignature {
+    param([string]$FilePath)
+    if (-not (Test-Path $FilePath)) { return "File Not Found" }
+    try {
+        $signature = Get-AuthenticodeSignature -FilePath $FilePath
+        switch ($signature.Status) {
+            "Valid" { return "Yes" }
+            "NotSigned" { return "No" }
+            default { return $signature.Status }
+        }
+    }
+    catch { return "Error Checking" }
+}
+
+function Resolve-ExecutablePath {
+    param([string]$ExecutablePath)
+    if ([string]::IsNullOrEmpty($ExecutablePath)) { return $null }
+    try {
+        if ([System.IO.Path]::IsPathRooted($ExecutablePath)) { return $ExecutablePath }
+    }
+    catch { return $null }
+    
+    $expandedPath = [System.Environment]::ExpandEnvironmentVariables($ExecutablePath)
+    if (Test-Path $expandedPath) { return $expandedPath }
+    
+    $searchPaths = @(
+        $ExecutablePath,
+        "$env:WINDIR\$ExecutablePath",
+        "$env:WINDIR\System32\$ExecutablePath", 
+        "$env:WINDIR\SysWOW64\$ExecutablePath"
+    )
+    
+    foreach ($path in $searchPaths) {
+        try { if (Test-Path $path) { return $path } }
+        catch { continue }
+    }
+    return $null
+}
+
+$bypassPrograms = @("cmd.exe", "powershell.exe", "powershell_ise.exe", "rundll32.exe", "regsvr32.exe", "taskmgr.exe", "LaunchTM.exe", "WinRAR.exe")
+$pattern = $bypassPrograms -join "|"
+
+$tasks = Get-ScheduledTask | ForEach-Object {
+    $task = $_
+    $task.Actions | ForEach-Object {
+        $action = $_
+        $suspect = if ($action.Execute -match $pattern) { "Yes" } else { "No" }
+        
+        $signed = "N/A"
+        if ($action.Execute) {
+            $resolvedPath = Resolve-ExecutablePath -ExecutablePath $action.Execute
+            $signed = if ($resolvedPath) { Test-FileSignature -FilePath $resolvedPath } else { "Invalid Path" }
+        }
+        
+        [PSCustomObject]@{
+            TaskName = $task.TaskName
+            TaskPath = $task.TaskPath
+            Action = $action.Execute
+            Arguments = $action.Arguments
+            Suspicion = $suspect
+            Signed = $signed
+        }
+    }
+}
+
+if ($tasks) {
+    $tasks | Out-GridView -Title "Scheduler Parser - Signed: Yes=Valid, No=Not Signed, Other=Issues" -PassThru
+} else {
+    Write-Host "No tasks found"
+}
+
+Write-Host "PRESS ENTER TO QUIT" -ForegroundColor White
+Read-Host
