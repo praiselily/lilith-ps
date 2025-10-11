@@ -8,14 +8,14 @@ ___       ___  ___       ___  _________  ___  ___
     \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
 Made with love by lily<3                                                       
                                                        
-                                                       
+                      SUSPICIOUS EXECUTIONS                                 
 "@ -ForegroundColor Cyan
 
 $OutputDirectory = "C:\Screenshare"
 $OutputFile = Join-Path $OutputDirectory "output.txt"
 $Artifacts = @()
 
-$SuspiciousKeywords = @("clicker", "auto", "mousebutton", "vape", "drip", "cheat", "hack", "inject", "bot", "macro", "manthe", "ghost", "client", "spoofer", "aim", "trigger", "reach", "velocity", "scaffold", "ka", "killaura", "keyauth", "hwid", "spoof", "anti", "echo")
+$SuspiciousKeywords = @("clicker", "auto", "mousebutton", "vape", "drip", "cheat", "hack", "inject", "bot", "macro", "manthe", "ghost", "spoofer", "aim", "trigger", "reach", "velocity", "scaffold", "ka", "killaura", "keyauth", "hwid", "spoof", "anti", "echo", "hollow", "doppel", "process", "system informer", "code", "node", "visual")
 
 $SuspiciousSigners = @("Manthe Industries LLC")
 
@@ -79,27 +79,27 @@ function Test-SuspiciousFile {
         return @()
     }
     
-    # Check for suspicious keywords (HIGH PRIORITY)
+    
     foreach ($keyword in $SuspiciousKeywords) {
         if ($FileName -match [regex]::Escape($keyword)) {
             $suspiciousReasons += "SUSPICIOUS_KEYWORD_$($keyword.ToUpper())"
         }
     }
     
-    # Check for spoofed extensions ONLY for BAM sources
-    if ($Source -eq "BAM" -or $Source -eq "BAM_Recent") {
+    
+    if ($Source -eq "BAM") {
         $extension = [System.IO.Path]::GetExtension($FilePath).ToLower()
         if ($extension -in $SpoofedExtensions) {
             $suspiciousReasons += "SPOOFED_EXTENSION_$($extension.ToUpper().Replace('.',''))"
         }
     }
     
-    # Check for double extensions
+    
     if ($FileName -match '\.[^\.]+\.(exe|dll|scr|bat|cmd|ps1|vbs|js)$') {
         $suspiciousReasons += "DOUBLE_EXTENSION"
     }
     
-    # Check for suspicious locations
+    
     $suspiciousPaths = @(
         "\\temp\\", "\\tmp\\", "\\users\\.*\\appdata\\", "\\programdata\\", 
         "\\windows\\temp\\", "\\recycle", "\\prefetch\\", "\\downloads\\"
@@ -119,27 +119,27 @@ function Get-SuspiciousPriority {
     
     $priority = 0
     
-    # Highest priority: suspicious keywords
+    
     if ($SuspiciousActivity -match "SUSPICIOUS_KEYWORD_") {
         $priority += 1000
     }
     
-    # High priority: spoofed extensions (only for BAM)
+    
     if ($SuspiciousActivity -match "SPOOFED_EXTENSION_") {
         $priority += 500
     }
     
-    # Medium priority: unsigned/invalid signatures
+    
     if ($SuspiciousActivity -match "Not Signed|Invalid|SUSPICIOUS_SIGNER") {
         $priority += 100
     }
     
-    # Lower priority: other suspicious activities
+    
     if ($SuspiciousActivity -ne "N/A") {
         $priority += 50
     }
     
-    # Bonus for non-exe files with suspicious activity
+    
     if ($FileName -notmatch "\.exe$" -and $SuspiciousActivity -ne "N/A") {
         $priority += 25
     }
@@ -856,7 +856,7 @@ function Show-ResultsGUI {
         }
     })
 
-    # Sort results by priority (keywords first)
+    
     $sortedResults = $Results | Sort-Object { 
         Get-SuspiciousPriority -SuspiciousActivity $_.SuspiciousActivity -FileName $_.FullPath
     } -Descending
@@ -972,7 +972,7 @@ Add-Content -Path $OutputFile -Value "Suspicious Signers: $($SuspiciousSigners -
 Add-Content -Path $OutputFile -Value ("=" * 80)
 Add-Content -Path $OutputFile -Value $header
 
-# Sort results by priority for the output file as well
+
 $sortedGroupedResults = $groupedResults | Sort-Object { 
     Get-SuspiciousPriority -SuspiciousActivity $_.SuspiciousActivity -FileName $_.FullPath
 } -Descending
@@ -992,18 +992,14 @@ $specialUSNCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -matc
 
 Write-Log "Scan completed!"
 Write-Log "Total suspicious files found: $($groupedResults.Count)"
-Write-Log "Files with suspicious keywords: $keywordCount"
 Write-Log "Non-.exe files: $nonExeCount"
 Write-Log "Unsigned files: $unsignedCount"
-Write-Log "Suspicious signer files: $suspiciousSignerCount"
 Write-Log "Spoofed extension files: $spoofedExtensionCount"
 Write-Log "Special USN activities: $specialUSNCount"
 Write-Log "Results saved to: $OutputFile"
 
 Write-Host "`n> SCAN COMPLETED <" -ForegroundColor Green
 Write-Host "Opening results GUI..." -ForegroundColor Yellow
-Write-Host "Suspicious files: $($groupedResults.Count)" -ForegroundColor Yellow
-Write-Host "Files with keywords: $keywordCount" -ForegroundColor Red
 Write-Host "Non-.exe files: $nonExeCount" -ForegroundColor Red
 Write-Host "Unsigned files: $unsignedCount" -ForegroundColor Red
 Write-Host "Spoofed extensions: $spoofedExtensionCount" -ForegroundColor Red
