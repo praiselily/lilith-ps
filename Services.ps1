@@ -49,25 +49,40 @@ foreach ($svc in $services) {
     $service = Get-Service -Name $svc.Name -ErrorAction SilentlyContinue
     if ($service) {
         if ($service.Status -eq "Running") {
-            Write-Host ("  {0,-15} {1,-35}" -f $svc.Name, $service.DisplayName) -ForegroundColor Green -NoNewline
-            try {
-                $process = Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'" | Select-Object ProcessId
-                if ($process.ProcessId -gt 0) {
-                    $proc = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
-                    if ($proc) {
-                        Write-Host (" | {0}" -f $proc.StartTime.ToString("HH:mm:ss")) -ForegroundColor Yellow
+            $displayName = $service.DisplayName
+            if ($displayName.Length -gt 40) {
+                $displayName = $displayName.Substring(0, 37) + "..."
+            }
+            Write-Host ("  {0,-12} {1,-40}" -f $svc.Name, $displayName) -ForegroundColor Green -NoNewline
+            
+            if ($svc.Name -eq "Bam") {
+                Write-Host " | Enabled" -ForegroundColor Yellow
+            } else {
+                try {
+                    $process = Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'" | Select-Object ProcessId
+                    if ($process.ProcessId -gt 0) {
+                        $proc = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+                        if ($proc) {
+                            Write-Host (" | {0}" -f $proc.StartTime.ToString("HH:mm:ss")) -ForegroundColor Yellow
+                        } else {
+                            Write-Host " | N/A" -ForegroundColor Gray
+                        }
                     } else {
-                        Write-Host (" | N/A") -ForegroundColor Gray
+                        Write-Host " | N/A" -ForegroundColor Gray
                     }
+                } catch {
+                    Write-Host " | N/A" -ForegroundColor Gray
                 }
-            } catch {
-                Write-Host " | N/A" -ForegroundColor Gray
             }
         } else {
-            Write-Host ("  {0,-15} {1,-35} {2}" -f $svc.Name, $service.DisplayName, $service.Status) -ForegroundColor Red
+            $displayName = $service.DisplayName
+            if ($displayName.Length -gt 40) {
+                $displayName = $displayName.Substring(0, 37) + "..."
+            }
+            Write-Host ("  {0,-12} {1,-40} {2}" -f $svc.Name, $displayName, $service.Status) -ForegroundColor Red
         }
     } else {
-        Write-Host ("  {0,-15} {1,-35} {2}" -f $svc.Name, "Not Found", "Stopped") -ForegroundColor Yellow
+        Write-Host ("  {0,-12} {1,-40} {2}" -f $svc.Name, "Not Found", "Stopped") -ForegroundColor Yellow
     }
 }
 
