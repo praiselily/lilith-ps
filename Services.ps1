@@ -56,7 +56,7 @@ foreach ($svc in $services) {
             Write-Host ("  {0,-12} {1,-40}" -f $svc.Name, $displayName) -ForegroundColor Green -NoNewline
             
             if ($svc.Name -eq "Bam") {
-                Write-Host " | Enabled" -ForegroundColor Yellow
+                Write-Host " | Enabled" -ForegroundColor Gray
             } else {
                 try {
                     $process = Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'" | Select-Object ProcessId
