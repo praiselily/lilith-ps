@@ -930,8 +930,6 @@ function Show-ResultsGUI {
 
 Write-Log "Starting suspicious executed files scan on ALL drives including C:..."
 Write-Log "Output file: $OutputFile"
-Write-Log "Suspicious keywords: $($SuspiciousKeywords -join ', ')"
-Write-Log "Suspicious signers: $($SuspiciousSigners -join ', ')"
 
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
