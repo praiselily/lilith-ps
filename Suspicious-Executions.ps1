@@ -6,9 +6,9 @@ ___       ___  ___       ___  _________  ___  ___
   \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \
    \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
     \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
-Made with love by lily <3
+Advanced System Analysis Tool
 
-                          Drive executions !
+                  COMPREHENSIVE EXECUTION ANALYSIS
 "@ -ForegroundColor Cyan
 
 $OutputDirectory = "C:\Screenshare"
@@ -27,6 +27,30 @@ $SuspiciousKeywords = @("clicker", "vape", "cheat", "hack", "inject", "bot", "ma
 $SuspiciousSigners = @("manthe", "cheat", "hack", "inject", "spoofer", "ghost", "crack", "keygen", "serial", "bypass", "exploit")
 $SpoofedExtensions = @(".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar", ".wsf", ".cpl", ".com", ".pif")
 
+$USN_REASON_DATA_OVERWRITE = 0x00000001
+$USN_REASON_DATA_EXTEND = 0x00000002
+$USN_REASON_DATA_TRUNCATION = 0x00000004
+$USN_REASON_NAMED_DATA_OVERWRITE = 0x00000010
+$USN_REASON_NAMED_DATA_EXTEND = 0x00000020
+$USN_REASON_NAMED_DATA_TRUNCATION = 0x00000040
+$USN_REASON_FILE_CREATE = 0x00000100
+$USN_REASON_FILE_DELETE = 0x00000200
+$USN_REASON_EA_CHANGE = 0x00000400
+$USN_REASON_SECURITY_CHANGE = 0x00000800
+$USN_REASON_RENAME_OLD_NAME = 0x00001000
+$USN_REASON_RENAME_NEW_NAME = 0x00002000
+$USN_REASON_INDEXABLE_CHANGE = 0x00004000
+$USN_REASON_BASIC_INFO_CHANGE = 0x00008000
+$USN_REASON_HARD_LINK_CHANGE = 0x00010000
+$USN_REASON_COMPRESSION_CHANGE = 0x00020000
+$USN_REASON_ENCRYPTION_CHANGE = 0x00040000
+$USN_REASON_OBJECT_ID_CHANGE = 0x00080000
+$USN_REASON_REPARSE_POINT_CHANGE = 0x00100000
+$USN_REASON_STREAM_CHANGE = 0x00200000
+$USN_REASON_TRANSACTED_CHANGE = 0x00400000
+$USN_REASON_INTEGRITY_CHANGE = 0x00800000
+$USN_REASON_DESIRED_STORAGE_CLASS_CHANGE = 0x01000000
+$USN_REASON_CLOSE = 0x80000000
 
 $HighPriorityFolders = @(
     "$env:USERPROFILE\Downloads",
@@ -244,8 +268,76 @@ function Get-ZoneIdentifier {
     }
 }
 
+function Get-USNReasonDescription {
+    param([uint32]$Reason)
+    
+    $reasons = @()
+    
+    if ($Reason -band $USN_REASON_DATA_OVERWRITE) { $reasons += "DATA_OVERWRITE" }
+    if ($Reason -band $USN_REASON_DATA_EXTEND) { $reasons += "DATA_EXTEND" }
+    if ($Reason -band $USN_REASON_DATA_TRUNCATION) { $reasons += "DATA_TRUNCATION" }
+    if ($Reason -band $USN_REASON_NAMED_DATA_OVERWRITE) { $reasons += "NAMED_DATA_OVERWRITE" }
+    if ($Reason -band $USN_REASON_NAMED_DATA_EXTEND) { $reasons += "NAMED_DATA_EXTEND" }
+    if ($Reason -band $USN_REASON_NAMED_DATA_TRUNCATION) { $reasons += "NAMED_DATA_TRUNCATION" }
+    if ($Reason -band $USN_REASON_FILE_CREATE) { $reasons += "FILE_CREATE" }
+    if ($Reason -band $USN_REASON_FILE_DELETE) { $reasons += "FILE_DELETE" }
+    if ($Reason -band $USN_REASON_EA_CHANGE) { $reasons += "EA_CHANGE" }
+    if ($Reason -band $USN_REASON_SECURITY_CHANGE) { $reasons += "SECURITY_CHANGE" }
+    if ($Reason -band $USN_REASON_RENAME_OLD_NAME) { $reasons += "RENAME_OLD_NAME" }
+    if ($Reason -band $USN_REASON_RENAME_NEW_NAME) { $reasons += "RENAME_NEW_NAME" }
+    if ($Reason -band $USN_REASON_INDEXABLE_CHANGE) { $reasons += "INDEXABLE_CHANGE" }
+    if ($Reason -band $USN_REASON_BASIC_INFO_CHANGE) { $reasons += "BASIC_INFO_CHANGE" }
+    if ($Reason -band $USN_REASON_HARD_LINK_CHANGE) { $reasons += "HARD_LINK_CHANGE" }
+    if ($Reason -band $USN_REASON_COMPRESSION_CHANGE) { $reasons += "COMPRESSION_CHANGE" }
+    if ($Reason -band $USN_REASON_ENCRYPTION_CHANGE) { $reasons += "ENCRYPTION_CHANGE" }
+    if ($Reason -band $USN_REASON_OBJECT_ID_CHANGE) { $reasons += "OBJECT_ID_CHANGE" }
+    if ($Reason -band $USN_REASON_REPARSE_POINT_CHANGE) { $reasons += "REPARSE_POINT_CHANGE" }
+    if ($Reason -band $USN_REASON_STREAM_CHANGE) { $reasons += "STREAM_CHANGE" }
+    if ($Reason -band $USN_REASON_TRANSACTED_CHANGE) { $reasons += "TRANSACTED_CHANGE" }
+    if ($Reason -band $USN_REASON_INTEGRITY_CHANGE) { $reasons += "INTEGRITY_CHANGE" }
+    if ($Reason -band $USN_REASON_DESIRED_STORAGE_CLASS_CHANGE) { $reasons += "DESIRED_STORAGE_CLASS_CHANGE" }
+    if ($Reason -band $USN_REASON_CLOSE) { $reasons += "CLOSE" }
+
+    if ($reasons.Count -eq 0) { return "UNKNOWN" }
+    return ($reasons -join " | ")
+}
+
+function Get-USNJournalChanges {
+    param([string]$FilePath)
+    
+    try {
+        if (-not (Test-Path $FilePath)) { return "N/A" }
+        
+        $fsutilOutput = & fsutil usn readjournal "$($FilePath.Substring(0,2))" 2>$null
+        if (-not $fsutilOutput) { return "N/A" }
+        
+        $fileName = [System.IO.Path]::GetFileName($FilePath)
+        $usnEntries = $fsutilOutput | Where-Object { $_ -match $fileName }
+        
+        if ($usnEntries.Count -eq 0) { return "N/A" }
+        
+        $allReasons = @()
+        foreach ($entry in $usnEntries) {
+            if ($entry -match "Reason:\s*0x([0-9a-fA-F]+)") {
+                $reasonHex = $matches[1]
+                $reasonInt = [Convert]::ToUInt32($reasonHex, 16)
+                $reasonDesc = Get-USNReasonDescription -Reason $reasonInt
+                $allReasons += $reasonDesc
+            }
+        }
+        
+        if ($allReasons.Count -eq 0) { return "N/A" }
+        
+        $uniqueReasons = $allReasons | Sort-Object | Get-Unique
+        return ($uniqueReasons -join " | ")
+    }
+    catch {
+        return "N/A"
+    }
+}
+
 function Get-SuspiciousPriority {
-    param([string]$SuspiciousActivity, [string]$FileName)
+    param([string]$SuspiciousActivity, [string]$FileName, [string]$USNReasons)
 
     $priority = 0
 
@@ -257,6 +349,16 @@ function Get-SuspiciousPriority {
     if ($SuspiciousActivity -match "Internet_Download") { $priority += 300 }
     if ($SuspiciousActivity -match "DOUBLE_EXTENSION") { $priority += 800 }
     if ($SuspiciousActivity -ne "N/A") { $priority += 100 }
+
+    if ($USNReasons -ne "N/A") {
+        $priority += 200
+        
+        if ($USNReasons -match "HARD_LINK_CHANGE") { $priority += 300 }
+        if ($USNReasons -match "REPARSE_POINT_CHANGE") { $priority += 300 }
+        if ($USNReasons -match "FILE_CREATE") { $priority += 150 }
+        if ($USNReasons -match "SECURITY_CHANGE") { $priority += 200 }
+        if ($USNReasons -match "RENAME_") { $priority += 250 }
+    }
 
     return $priority
 }
@@ -298,7 +400,6 @@ function Evaluate-FileSuspicion {
         $fileName = $fileInfo.Name
         $suspiciousReasons = @()
 
-        
         foreach ($keyword in $SuspiciousKeywords) {
             if ($fileName -match [regex]::Escape($keyword)) {
                 $suspiciousReasons += "SUSPICIOUS_KEYWORD_$($keyword.ToUpper())"
@@ -318,9 +419,8 @@ function Evaluate-FileSuspicion {
 
         $extension = [System.IO.Path]::GetExtension($normalizedPath).ToLower()
         if ($extension -in @('.exe', '.dll', '.scr', '.sys', '.ps1', '.bat', '.cmd', '.vbs', '.js')) {
-            
             $entropy = Get-FileEntropyCached -FilePath $normalizedPath
-            if ($entropy -gt 7.0) {  
+            if ($entropy -gt 7.0) {
                 $suspiciousReasons += "HIGH_ENTROPY_$entropy"
             }
 
@@ -335,20 +435,20 @@ function Evaluate-FileSuspicion {
             }
         }
 
-        
         $signature = Get-DigitalSignatureCached -FilePath $normalizedPath
         $fileHash = Get-FileHashCached -FilePath $normalizedPath
 
-        
         if ($signature -match "Unsigned") {
             $entropy = Get-FileEntropyCached -FilePath $normalizedPath
-            if ($entropy -gt 6.8) {  
+            if ($entropy -gt 6.8) {
                 $suspiciousReasons += "UNSIGNED_HIGH_ENTROPY_$entropy"
             }
         }
 
-        if ($suspiciousReasons.Count -gt 0 -or $signature -match "SUSPICIOUS_SIGNER") {
-            $priority = Get-SuspiciousPriority -SuspiciousActivity ($suspiciousReasons -join " | ") -FileName $fileName
+        $usnChanges = Get-USNJournalChanges -FilePath $normalizedPath
+
+        if ($suspiciousReasons.Count -gt 0 -or $signature -match "SUSPICIOUS_SIGNER" -or $usnChanges -ne "N/A") {
+            $priority = Get-SuspiciousPriority -SuspiciousActivity ($suspiciousReasons -join " | ") -FileName $fileName -USNReasons $usnChanges
             $confidence = if ($suspiciousReasons.Count -gt 3 -or $priority -gt 1500) { "HIGH" } elseif ($suspiciousReasons.Count -gt 1 -or $priority -gt 800) { "MEDIUM" } else { "LOW" }
 
             return [PSCustomObject]@{
@@ -360,7 +460,7 @@ function Evaluate-FileSuspicion {
                 SHA256 = $fileHash
                 ArtifactFile = $ArtifactFile
                 SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
-                USNReason = $USNReason
+                USNReason = $usnChanges
                 RawReason = $RawReason
                 Priority = $priority
                 Confidence = $confidence
@@ -372,7 +472,6 @@ function Evaluate-FileSuspicion {
     }
     return $null
 }
-
 
 function Get-PrefetchFiles {
     Write-Log "Scanning Prefetch files for suspicious keywords..."
@@ -386,13 +485,11 @@ function Get-PrefetchFiles {
             Write-Log "Checking $($prefetchFiles.Count) prefetch files for suspicious keywords"
             
             foreach ($pf in $prefetchFiles) {
-                $exeName = $pf.Name.Split('-')[0]  
-                
+                $exeName = $pf.Name.Split('-')[0]
                 
                 foreach ($keyword in $SuspiciousKeywords) {
                     if ($exeName -match [regex]::Escape($keyword)) {
                         Write-Log "SUSPICIOUS PREFETCH: $($pf.Name) contains keyword: $keyword"
-                        
                         
                         $result = [PSCustomObject]@{
                             Source = "Prefetch"
@@ -409,20 +506,19 @@ function Get-PrefetchFiles {
                             Confidence = "MEDIUM"
                         }
                         $results += $result
-                        break  
+                        break
                     }
                 }
             }
         }
     }
     catch {
-        Write-Log "Error accessing prefetch directory - $($_.Exception.Message)"
+        Write-Log "Error accessing prefetch directory"
     }
 
     Write-Log "Prefetch keyword scan completed - $($results.Count) suspicious prefetch files found"
     return $results
 }
-
 
 function Get-BAMEntries {
     Write-Log "Scanning BAM entries with enhanced detection..."
@@ -450,7 +546,6 @@ function Get-BAMEntries {
                         try {
                             $entryValue = Get-ItemProperty -Path $entry.PSPath -ErrorAction SilentlyContinue
                             if ($entryValue) {
-                                
                                 $propertyNames = $entryValue.PSObject.Properties | Where-Object {
                                     $_.Name -notlike "PS*" -and $_.Name -ne "Path"
                                 }
@@ -459,20 +554,19 @@ function Get-BAMEntries {
                                     $data = $prop.Value
                                     $filePaths = @()
                                     
-                                    
                                     if ($data -is [byte[]]) {
-                                        
                                         $asciiString = [System.Text.Encoding]::ASCII.GetString($data)
+                                        $unicodeString = [System.Text.Encoding]::Unicode.GetString($data)
+                                        
                                         $filePaths += [regex]::Matches($asciiString, "[a-zA-Z]:\\[^\x00]+\.(exe|dll|scr|bat|cmd|ps1|vbs|js)") | ForEach-Object { $_.Value }
+                                        $filePaths += [regex]::Matches($unicodeString, "[a-zA-Z]:\\[^\x00]+\.(exe|dll|scr|bat|cmd|ps1|vbs|js)") | ForEach-Object { $_.Value }
                                     }
                                     elseif ($data -is [string]) {
-                                        # Direct string might contain path
                                         if ($data -match "[a-zA-Z]:\\[^\x00]+\.(exe|dll|scr|bat|cmd|ps1|vbs|js)") {
                                             $filePaths += $matches[0]
                                         }
                                     }
                                     
-                                    # Process found file paths
                                     foreach ($filePath in $filePaths) {
                                         if ($filePath -and (Test-Path $filePath)) {
                                             $file = Get-Item $filePath -ErrorAction SilentlyContinue
@@ -489,13 +583,13 @@ function Get-BAMEntries {
                             }
                         }
                         catch {
-                            Write-Log "Error processing BAM entry $($entry.Name) - $($_.Exception.Message)"
+                            Write-Log "Error processing BAM entry $($entry.Name)"
                         }
                     }
                 }
             }
             catch {
-                Write-Log "Error accessing BAM registry path $bamPath - $($_.Exception.Message)"
+                Write-Log "Error accessing BAM registry path $bamPath"
             }
         }
     }
@@ -504,7 +598,6 @@ function Get-BAMEntries {
     return $results
 }
 
-# IMPROVED ShimCache scanning
 function Get-ShimCacheEntries {
     Write-Log "Scanning ShimCache entries with improved parsing..."
     $results = @()
@@ -514,81 +607,110 @@ function Get-ShimCacheEntries {
         if (Test-Path $shimCachePath) {
             Write-Log "Accessing ShimCache registry..."
             
-            # Try multiple property names that might contain the cache data
             $propertyNames = @("AppCompatCache", "AppCompatCache256", "AppCompatCache1024")
             
             foreach ($propName in $propertyNames) {
                 try {
+                    Write-Log "Trying ShimCache property: $propName"
                     $cacheData = Get-ItemProperty -Path $shimCachePath -Name $propName -ErrorAction SilentlyContinue
                     if ($cacheData -and $cacheData.$propName -is [byte[]]) {
-                        Write-Log "Found ShimCache data in property - $propName"
+                        Write-Log "Found ShimCache data in property - $propName (Size: $($cacheData.$propName.Length) bytes)"
+                        
+                        # Use a simpler, more direct approach for path extraction
                         $binaryData = $cacheData.$propName
+                        
+                        # Convert to string and look for executable paths more efficiently
                         $asciiContent = [System.Text.Encoding]::ASCII.GetString($binaryData)
                         
-                        # Multiple patterns to catch different path formats
-                        $patterns = @(
-                            "[a-zA-Z]:\\[^\x00]{10,}\.(exe|dll|scr)",
-                            "\\Device\\HarddiskVolume[^\\]+\\[^\x00]+\.(exe|dll|scr)",
-                            "[a-zA-Z]:\\Windows[^\x00]*\.(exe|dll|scr)",
-                            "[a-zA-Z]:\\Program[^\x00]*\.(exe|dll|scr)"
+                        # Use simpler, more targeted regex patterns
+                        $simplePatterns = @(
+                            "[A-Z]:\\[^\\]{1,100}\.(exe|dll|scr)",
+                            "\\Windows\\[^\\]{1,50}\.(exe|dll|scr)",
+                            "\\Program Files\\[^\\]{1,50}\.(exe|dll|scr)",
+                            "\\Users\\[^\\]{1,50}\.(exe|dll|scr)"
                         )
                         
-                        foreach ($pattern in $patterns) {
-                            $paths = [regex]::Matches($asciiContent, $pattern) | ForEach-Object { $_.Value } | Select-Object -Unique
-                            foreach ($filePath in $paths) {
-                                # Convert device path if needed
-                                if ($filePath -match "^\\Device\\HarddiskVolume") {
-                                    # Simple conversion - replace with C: for common case
-                                    $filePath = $filePath -replace "^\\Device\\HarddiskVolume[0-9]+\\", "C:\"
-                                }
-                                
-                                if ($filePath -and (Test-Path $filePath)) {
-                                    $file = Get-Item $filePath -ErrorAction SilentlyContinue
-                                    if ($file -and -not ($file -is [System.IO.DirectoryInfo])) {
-                                        $result = Evaluate-FileSuspicion -FilePath $file.FullName -Source "ShimCache" -ArtifactFile $shimCachePath -Timestamp $file.LastWriteTime
-                                        if ($result) { 
-                                            $results += $result
-                                            Write-Log "ShimCache found - $filePath"
+                        $foundPaths = @()
+                        foreach ($pattern in $simplePatterns) {
+                            $matches = [regex]::Matches($asciiContent, $pattern)
+                            foreach ($match in $matches) {
+                                $filePath = $match.Value
+                                if ($filePath -notin $foundPaths) {
+                                    $foundPaths += $filePath
+                                    
+                                    # Normalize the path
+                                    if ($filePath -match "^\\\\") {
+                                        $filePath = "C:" + $filePath
+                                    }
+                                    
+                                    if (Test-Path $filePath) {
+                                        $file = Get-Item $filePath -ErrorAction SilentlyContinue
+                                        if ($file -and -not ($file -is [System.IO.DirectoryInfo])) {
+                                            $result = Evaluate-FileSuspicion -FilePath $file.FullName -Source "ShimCache" -ArtifactFile $shimCachePath -Timestamp $file.LastWriteTime
+                                            if ($result) { 
+                                                $results += $result
+                                                Write-Log "ShimCache found - $filePath"
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                        break  # Found working property, no need to check others
+                        
+                        # If we found results with this property, we can break early
+                        if ($results.Count -gt 0) {
+                            Write-Log "Successfully parsed ShimCache data from $propName with $($results.Count) results"
+                            break
+                        }
                     }
                 }
                 catch {
-                    Write-Log "Error reading ShimCache property $propName - $($_.Exception.Message)"
+                    Write-Log "Error reading ShimCache property $propName: $($_.Exception.Message)"
+                }
+            }
+            
+            # Fallback: Try to get just the file names if binary parsing fails
+            if ($results.Count -eq 0) {
+                Write-Log "Using fallback method for ShimCache extraction"
+                try {
+                    $shimCacheContent = reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\AppCompatCache" 2>$null
+                    if ($shimCacheContent) {
+                        $lines = $shimCacheContent -split "`r`n"
+                        foreach ($line in $lines) {
+                            if ($line -match "[A-Z]:\\[^\\]{1,100}\.(exe|dll|scr)") {
+                                $filePath = $matches[0]
+                                if (Test-Path $filePath) {
+                                    $file = Get-Item $filePath -ErrorAction SilentlyContinue
+                                    if ($file -and -not ($file -is [System.IO.DirectoryInfo])) {
+                                        $result = Evaluate-FileSuspicion -FilePath $file.FullName -Source "ShimCache" -ArtifactFile $shimCachePath -Timestamp $file.LastWriteTime
+                                        if ($result) { 
+                                            $results += $result
+                                            Write-Log "ShimCache (fallback) found - $filePath"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {
+                    Write-Log "Fallback ShimCache method also failed"
                 }
             }
         }
     }
     catch {
-        Write-Log "Error accessing ShimCache - $($_.Exception.Message)"
+        Write-Log "Error accessing ShimCache: $($_.Exception.Message)"
     }
 
     Write-Log "ShimCache scan completed - $($results.Count) entries found"
     return $results
 }
-
-# IMPROVED AmCache scanning
-function Get-AmCacheEntries {
-    Write-Log "Scanning AmCache entries with alternative methods..."
-    $results = @()
-
-    try {
-        # Try multiple AmCache locations
-        $amCachePaths = @(
-            "$env:SystemRoot\AppCompat\Programs\Amcache.hve",
-            "HKLM:\System\AppCompat\Programs\Amcache.hve"
-        )
-        
         foreach ($amCachePath in $amCachePaths) {
             if (Test-Path $amCachePath) {
                 Write-Log "Found AmCache at - $amCachePath"
                 
                 try {
-                    # Method 1: Direct registry query
                     $tempFile = Join-Path $env:TEMP "amcache_export_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
                     & reg.exe export "HKLM\System\AppCompat\Programs\Amcache.hve" "$tempFile" /y 2>$null
                     
@@ -596,7 +718,6 @@ function Get-AmCacheEntries {
                         Write-Log "Processing exported AmCache data..."
                         $amCacheContent = Get-Content $tempFile -Raw -ErrorAction SilentlyContinue
                         if ($amCacheContent) {
-                            # Look for executable paths in the exported data
                             $paths = [regex]::Matches($amCacheContent, "[a-zA-Z]:\\[^\x00\r\n]{10,}\.(exe|dll|scr)") | ForEach-Object { $_.Value } | Select-Object -Unique
                             
                             foreach ($filePath in $paths) {
@@ -616,15 +737,13 @@ function Get-AmCacheEntries {
                     }
                 }
                 catch {
-                    Write-Log "Error processing AmCache file $amCachePath - $($_.Exception.Message)"
+                    Write-Log "Error processing AmCache file $amCachePath"
                 }
             }
         }
         
-        # Alternative: Check recent file executions from other sources
         Write-Log "Checking for additional execution artifacts..."
         
-        # Check UserAssist for recent executions
         $userAssistPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist"
         if (Test-Path $userAssistPath) {
             try {
@@ -648,26 +767,24 @@ function Get-AmCacheEntries {
                 }
             }
             catch {
-                Write-Log "Error reading UserAssist - $($_.Exception.Message)"
+                Write-Log "Error reading UserAssist"
             }
         }
     }
     catch {
-        Write-Log "Error accessing AmCache - $($_.Exception.Message)"
+        Write-Log "Error accessing AmCache"
     }
 
     Write-Log "AmCache scan completed - $($results.Count) entries found"
     return $results
 }
 
-# IMPROVED Event Log scanning with Sysmon workarounds
 function Get-EventLogExecutions {
     Write-Log "Scanning Event Logs for process executions with enhanced error handling..."
     $results = @()
 
     $startTime = (Get-Date).AddDays(-30)
 
-    # Security Event Log (4688 - Process Creation)
     try {
         Write-Log "Scanning Security event log for process creations..."
         $events = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4688; StartTime=$startTime} -MaxEvents 500 -ErrorAction SilentlyContinue
@@ -684,21 +801,18 @@ function Get-EventLogExecutions {
                 }
             }
             catch {
-                # Skip individual event errors
                 continue
             }
         }
         Write-Log "Security event log scan completed - $($events.Count) events processed"
     }
     catch {
-        Write-Log "Error accessing Security event log - $($_.Exception.Message)"
+        Write-Log "Error accessing Security event log"
     }
 
-    # Sysmon Event Log with multiple fallback methods
     try {
         Write-Log "Attempting to access Sysmon event logs..."
         
-        # Method 1: Try different Sysmon log names
         $sysmonLogNames = @('Microsoft-Windows-Sysmon/Operational', 'Sysmon', 'SysmonOperational')
         
         foreach ($logName in $sysmonLogNames) {
@@ -725,15 +839,14 @@ function Get-EventLogExecutions {
                             continue
                         }
                     }
-                    break  # Found working log, exit loop
+                    break
                 }
             }
             catch {
-                Write-Log "Failed to access Sysmon log $logName - $($_.Exception.Message)"
+                Write-Log "Failed to access Sysmon log $logName"
             }
         }
 
-        # Method 2: Try WMI event query as fallback
         if ($results.Count -eq 0) {
             Write-Log "Trying WMI event query as fallback..."
             try {
@@ -746,15 +859,14 @@ function Get-EventLogExecutions {
                 }
             }
             catch {
-                Write-Log "WMI event query also failed - $($_.Exception.Message)"
+                Write-Log "WMI event query also failed"
             }
         }
     }
     catch {
-        Write-Log "All Sysmon access methods failed - $($_.Exception.Message)"
+        Write-Log "All Sysmon access methods failed"
     }
 
-    # Application and System logs for suspicious entries
     try {
         Write-Log "Checking Application and System logs for suspicious entries..."
         $logNames = @('Application', 'System')
@@ -769,19 +881,18 @@ function Get-EventLogExecutions {
                 }
             }
             catch {
-                Write-Log "Error accessing $logName log - $($_.Exception.Message)"
+                Write-Log "Error accessing $logName log"
             }
         }
     }
     catch {
-        Write-Log "Error checking application/system logs - $($_.Exception.Message)"
+        Write-Log "Error checking application/system logs"
     }
 
     Write-Log "Event log scan completed - $($results.Count) process executions found"
     return $results
 }
 
-# COMPREHENSIVE folder scanning with enhanced signature checking
 function Get-RecentExecutions {
     Write-Log "Comprehensive scan of target folders with enhanced detection..."
     $results = @()
@@ -791,7 +902,6 @@ function Get-RecentExecutions {
             try {
                 Write-Log "Scanning all executable files in - $folder"
                 
-                # Scan all executable file types
                 $fileTypes = @("*.exe", "*.dll", "*.scr", "*.ps1", "*.bat", "*.cmd", "*.vbs", "*.js", "*.msi", "*.com", "*.pif")
                 $allFiles = @()
                 
@@ -802,41 +912,35 @@ function Get-RecentExecutions {
                 
                 Write-Log "Found $($allFiles.Count) files in $folder"
 
-                # Process each file with enhanced checks
                 foreach ($file in $allFiles) {
-                    # Enhanced signature checking
                     $signature = Get-DigitalSignatureCached -FilePath $file.FullName
                     
-                    # Enhanced entropy checking for all files
                     $entropy = Get-FileEntropyCached -FilePath $file.FullName
                     
                     $suspiciousReasons = @()
                     
-                    # Check for suspicious keywords in filename
                     foreach ($keyword in $SuspiciousKeywords) {
                         if ($file.Name -match [regex]::Escape($keyword)) {
                             $suspiciousReasons += "SUSPICIOUS_KEYWORD_$($keyword.ToUpper())"
                         }
                     }
                     
-                    # Enhanced entropy checks
                     if ($entropy -gt 6.8) {
                         $suspiciousReasons += "HIGH_ENTROPY_$entropy"
                     }
                     
-                    # Check for unsigned files with high entropy
                     if ($signature -match "Unsigned" -and $entropy -gt 6.5) {
                         $suspiciousReasons += "UNSIGNED_HIGH_ENTROPY_$entropy"
                     }
                     
-                    # Check file extension spoofing
                     $extension = [System.IO.Path]::GetExtension($file.FullName).ToLower()
                     if ($extension -in $SpoofedExtensions) {
                         $suspiciousReasons += "SPOOFED_EXTENSION_$($extension.ToUpper().Replace('.',''))"
                     }
                     
                     if ($suspiciousReasons.Count -gt 0 -or $signature -match "SUSPICIOUS_SIGNER") {
-                        $priority = Get-SuspiciousPriority -SuspiciousActivity ($suspiciousReasons -join " | ") -FileName $file.Name
+                        $usnChanges = Get-USNJournalChanges -FilePath $file.FullName
+                        $priority = Get-SuspiciousPriority -SuspiciousActivity ($suspiciousReasons -join " | ") -FileName $file.Name -USNReasons $usnChanges
                         $confidence = if ($suspiciousReasons.Count -gt 3 -or $priority -gt 1500) { "HIGH" } elseif ($suspiciousReasons.Count -gt 1 -or $priority -gt 800) { "MEDIUM" } else { "LOW" }
 
                         $result = [PSCustomObject]@{
@@ -848,7 +952,7 @@ function Get-RecentExecutions {
                             SHA256 = Get-FileHashCached -FilePath $file.FullName
                             ArtifactFile = $folder
                             SuspiciousActivity = if ($suspiciousReasons.Count -gt 0) { ($suspiciousReasons -join " | ") } else { "N/A" }
-                            USNReason = "N/A"
+                            USNReason = $usnChanges
                             RawReason = "N/A"
                             Priority = $priority
                             Confidence = $confidence
@@ -858,7 +962,7 @@ function Get-RecentExecutions {
                 }
             }
             catch {
-                Write-Log "Error scanning folder $folder - $($_.Exception.Message)"
+                Write-Log "Error scanning folder $folder"
             }
         }
     }
@@ -866,7 +970,6 @@ function Get-RecentExecutions {
     return $results
 }
 
-# FAST LNK file scanning - only 10 most recent
 function Get-RecentLNKFiles {
     Write-Log "Scanning 10 most recent LNK files..."
     $results = @()
@@ -879,7 +982,6 @@ function Get-RecentLNKFiles {
 
         foreach ($lnkPath in $lnkPaths) {
             if (Test-Path $lnkPath) {
-                # Get only the 10 most recent LNK files
                 $lnkFiles = Get-ChildItem -Path $lnkPath -Filter "*.lnk" -File -ErrorAction SilentlyContinue | 
                            Sort-Object LastWriteTime -Descending | 
                            Select-Object -First 10
@@ -901,7 +1003,6 @@ function Get-RecentLNKFiles {
                         }
                     }
                     catch {
-                        # Skip problematic LNK files
                         continue
                     }
                 }
@@ -909,7 +1010,7 @@ function Get-RecentLNKFiles {
         }
     }
     catch {
-        Write-Log "Error scanning LNK files - $($_.Exception.Message)"
+        Write-Log "Error scanning LNK files"
     }
 
     Write-Log "LNK files scan completed - $($results.Count) entries found"
@@ -1000,6 +1101,7 @@ function Show-ResultsGUI {
             @{Name="Timestamp"; HeaderText="Timestamp"; Width=120},
             @{Name="Signature"; HeaderText="Signature"; Width=150},
             @{Name="SuspiciousActivity"; HeaderText="Suspicious Activity"; Width=200},
+            @{Name="USNReason"; HeaderText="USN Changes"; Width=150},
             @{Name="Priority"; HeaderText="Priority"; Width=70},
             @{Name="Confidence"; HeaderText="Confidence"; Width=80}
         )
@@ -1011,10 +1113,10 @@ function Show-ResultsGUI {
             }
         }
 
-        $sortedResults = $Results | Sort-Object Priority -Descending | Select-Object Source, FullPath, Timestamp, Signature, SuspiciousActivity, Priority, Confidence
+        $sortedResults = $Results | Sort-Object Priority -Descending | Select-Object Source, FullPath, Timestamp, Signature, SuspiciousActivity, USNReason, Priority, Confidence
         
         foreach ($item in $sortedResults) {
-            $dataGridView.Rows.Add($item.Source, $item.FullPath, $item.Timestamp, $item.Signature, $item.SuspiciousActivity, $item.Priority, $item.Confidence) | Out-Null
+            $dataGridView.Rows.Add($item.Source, $item.FullPath, $item.Timestamp, $item.Signature, $item.SuspiciousActivity, $item.USNReason, $item.Priority, $item.Confidence) | Out-Null
         }
 
         $dataGridView.Add_CellFormatting({
@@ -1025,6 +1127,7 @@ function Show-ResultsGUI {
                 $confidence = $row.Cells["Confidence"].Value
                 $suspiciousActivity = $row.Cells["SuspiciousActivity"].Value
                 $signature = $row.Cells["Signature"].Value
+                $usnReason = $row.Cells["USNReason"].Value
                 
                 if ($confidence -eq "HIGH") {
                     $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::LightCoral
@@ -1035,6 +1138,15 @@ function Show-ResultsGUI {
                 if ($e.ColumnIndex -eq 4 -and $suspiciousActivity -ne "N/A") {
                     $e.CellStyle.BackColor = [System.Drawing.Color]::OrangeRed
                     $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                }
+                
+                if ($e.ColumnIndex -eq 5 -and $usnReason -ne "N/A") {
+                    if ($usnReason -match "HARD_LINK_CHANGE" -or $usnReason -match "REPARSE_POINT_CHANGE") {
+                        $e.CellStyle.BackColor = [System.Drawing.Color]::DarkRed
+                        $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                    } else {
+                        $e.CellStyle.BackColor = [System.Drawing.Color]::LightBlue
+                    }
                 }
                 
                 if ($e.ColumnIndex -eq 3 -and $signature -match "SUSPICIOUS_SIGNER") {
@@ -1061,7 +1173,8 @@ function Show-ResultsGUI {
                 if ($row.Cells["FullPath"].Value -match $filter -or 
                     $row.Cells["Source"].Value -match $filter -or 
                     $row.Cells["SuspiciousActivity"].Value -match $filter -or
-                    $row.Cells["Signature"].Value -match $filter) {
+                    $row.Cells["Signature"].Value -match $filter -or
+                    $row.Cells["USNReason"].Value -match $filter) {
                     $visible = $true
                 }
                 $row.Visible = $visible
@@ -1076,8 +1189,9 @@ function Show-ResultsGUI {
         $mediumConfidenceCount = ($Results | Where-Object { $_.Confidence -eq "MEDIUM" }).Count
         $unsignedCount = ($Results | Where-Object { $_.Signature -match "Unsigned" }).Count
         $suspiciousSignerCount = ($Results | Where-Object { $_.Signature -match "SUSPICIOUS_SIGNER" }).Count
+        $usnChangeCount = ($Results | Where-Object { $_.USNReason -ne "N/A" }).Count
         
-        $summaryLabel.Text = "Files: $($Results.Count) | Suspicious: $suspiciousCount | High: $highConfidenceCount | Medium: $mediumConfidenceCount | Unsigned: $unsignedCount | Bad Signers: $suspiciousSignerCount"
+        $summaryLabel.Text = "Files: $($Results.Count) | Suspicious: $suspiciousCount | High: $highConfidenceCount | Medium: $mediumConfidenceCount | Unsigned: $unsignedCount | Bad Signers: $suspiciousSignerCount | USN Changes: $usnChangeCount"
 
         $closeButton = New-Object System.Windows.Forms.Button
         $closeButton.Location = New-Object System.Drawing.Point(1050, 500)
@@ -1112,18 +1226,17 @@ function Show-ResultsGUI {
         Write-Log "GUI displayed successfully"
     }
     catch {
-        Write-Log "GUI display error - $($_.Exception.Message)"
+        Write-Log "GUI display error"
         Write-Host "GUI interface unavailable. Check output files for complete results." -ForegroundColor Yellow
     }
 }
 
-# MAIN EXECUTION - FOCUSED ON DETECTION
-Write-Log "Starting enhanced execution analysis with focus on detection..."
+Write-Log "Starting enhanced execution analysis with USN Journal integration..."
 Write-Log "Target folders: $($HighPriorityFolders -join ', ')"
 
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
-    Write-Log "Administrative privileges not detected - some features may be limited"
+    Write-Log "Administrative privileges not detected - USN Journal features may be limited"
 }
 
 if (Test-Path $OutputFile) {
@@ -1135,18 +1248,16 @@ if (Test-Path $OutputFile) {
     }
 }
 
-Write-Log "Running focused detection scans..."
+Write-Log "Running enhanced detection scans with USN Journal monitoring..."
 
-# Run only the effective detection functions
-$Artifacts += Get-PrefetchFiles  # Fast keyword-based prefetch scanning
-$Artifacts += Get-BAMEntries     # Enhanced BAM with better SID handling
-$Artifacts += Get-ShimCacheEntries  # Improved ShimCache parsing
-$Artifacts += Get-AmCacheEntries    # Enhanced AmCache with alternative methods
-$Artifacts += Get-EventLogExecutions  # Enhanced event log scanning with Sysmon workarounds
-$Artifacts += Get-RecentExecutions  # Comprehensive folder scanning
-$Artifacts += Get-RecentLNKFiles    # Only 10 most recent LNK files
+$Artifacts += Get-PrefetchFiles
+$Artifacts += Get-BAMEntries
+$Artifacts += Get-ShimCacheEntries
+$Artifacts += Get-AmCacheEntries
+$Artifacts += Get-EventLogExecutions
+$Artifacts += Get-RecentExecutions
+$Artifacts += Get-RecentLNKFiles
 
-# Process and group results
 $groupedResults = $Artifacts | Group-Object FullPath | ForEach-Object {
     $fileGroup = $_.Group
     $occurrenceCount = $fileGroup.Count
@@ -1155,18 +1266,18 @@ $groupedResults = $Artifacts | Group-Object FullPath | ForEach-Object {
     $highestPriority
 } | Sort-Object Priority -Descending
 
-# Export results
 Flush-LogBuffer
 Export-Results -Results $groupedResults -OutputPath $OutputFile
 Export-JsonResults -Results $groupedResults -OutputPath $JsonOutputFile
 
-# Summary statistics
 $suspiciousCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
 $unsignedCount = ($groupedResults | Where-Object { $_.Signature -match "Unsigned" }).Count
 $suspiciousSignerCount = ($groupedResults | Where-Object { $_.Signature -match "SUSPICIOUS_SIGNER" }).Count
 $keywordCount = ($groupedResults | Where-Object { $_.SuspiciousActivity -match "SUSPICIOUS_KEYWORD_" }).Count
 $highConfidenceCount = ($groupedResults | Where-Object { $_.Confidence -eq "HIGH" }).Count
 $mediumConfidenceCount = ($groupedResults | Where-Object { $_.Confidence -eq "MEDIUM" }).Count
+$usnChangeCount = ($groupedResults | Where-Object { $_.USNReason -ne "N/A" }).Count
+$hardLinkReparseCount = ($groupedResults | Where-Object { $_.USNReason -match "HARD_LINK_CHANGE|REPARSE_POINT_CHANGE" }).Count
 
 Write-Log "Analysis completed successfully"
 Write-Log "Total files analyzed: $($groupedResults.Count)"
@@ -1175,6 +1286,8 @@ Write-Log "High confidence detections: $highConfidenceCount"
 Write-Log "Medium confidence detections: $mediumConfidenceCount"
 Write-Log "Unsigned executables: $unsignedCount"
 Write-Log "Suspicious signers detected: $suspiciousSignerCount"
+Write-Log "Files with USN changes: $usnChangeCount"
+Write-Log "Files with hardlink/reparse changes: $hardLinkReparseCount"
 Write-Log "Results saved to: $OutputFile"
 Write-Log "JSON results saved to: $JsonOutputFile"
 
@@ -1187,9 +1300,10 @@ Write-Host "  Medium confidence: $mediumConfidenceCount" -ForegroundColor $(if (
 Write-Host "  Keywords detected: $keywordCount" -ForegroundColor $(if ($keywordCount -gt 0) { "Red" } else { "Green" })
 Write-Host "  Unsigned executables: $unsignedCount" -ForegroundColor $(if ($unsignedCount -gt 0) { "Yellow" } else { "Green" })
 Write-Host "  Suspicious signers: $suspiciousSignerCount" -ForegroundColor $(if ($suspiciousSignerCount -gt 0) { "Red" } else { "Green" })
+Write-Host "  USN changes detected: $usnChangeCount" -ForegroundColor $(if ($usnChangeCount -gt 0) { "Cyan" } else { "Green" })
+Write-Host "  Hardlink/Reparse changes: $hardLinkReparseCount" -ForegroundColor $(if ($hardLinkReparseCount -gt 0) { "Red" } else { "Green" })
 Write-Host "`nOutput files:" -ForegroundColor Cyan
 Write-Host "  $OutputFile" -ForegroundColor White
 Write-Host "  $JsonOutputFile" -ForegroundColor White
 
-# Show GUI
 Show-ResultsGUI -Results $groupedResults
