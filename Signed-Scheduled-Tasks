@@ -1,77 +1,54 @@
 # Borrowed base scipt from nolww and added sig checks
-
 Start-Sleep -Seconds 1
 Write-Host "Optimized by Lily (the BEST sser****)" -ForegroundColor Red
 Write-Host "Analyzing scheduled tasks..." -ForegroundColor Red
 Start-Sleep -Seconds 1
 
-function Test-FileSignature {
-    param([string]$FilePath)
-    if (-not (Test-Path $FilePath)) { return "File Not Found" }
+function Test-Signature {
+    param([string]$Path)
     try {
-        $signature = Get-AuthenticodeSignature -FilePath $FilePath
-        switch ($signature.Status) {
-            "Valid" { return "Yes" }
-            "NotSigned" { return "No" }
-            default { return $signature.Status }
-        }
+        return (Get-AuthenticodeSignature -FilePath $Path -ErrorAction Stop).Status -eq "Valid"
     }
-    catch { return "Error Checking" }
+    catch { return $false }
 }
 
-function Resolve-ExecutablePath {
-    param([string]$ExecutablePath)
-    if ([string]::IsNullOrEmpty($ExecutablePath)) { return $null }
-    try {
-        if ([System.IO.Path]::IsPathRooted($ExecutablePath)) { return $ExecutablePath }
+function Get-FullPath {
+    param([string]$ExePath)
+    if ([string]::IsNullOrWhiteSpace($ExePath)) { return $null }
+    $ExePath = $ExePath.Trim('"')
+    $paths = @($ExePath, [Environment]::ExpandEnvironmentVariables($ExePath))
+    if ($ExePath -notmatch '\\') {
+        $paths += "$env:WINDIR\$ExePath", "$env:WINDIR\System32\$ExePath"
     }
-    catch { return $null }
-    
-    $expandedPath = [System.Environment]::ExpandEnvironmentVariables($ExecutablePath)
-    if (Test-Path $expandedPath) { return $expandedPath }
-    
-    $searchPaths = @(
-        $ExecutablePath,
-        "$env:WINDIR\$ExecutablePath",
-        "$env:WINDIR\System32\$ExecutablePath", 
-        "$env:WINDIR\SysWOW64\$ExecutablePath"
-    )
-    
-    foreach ($path in $searchPaths) {
-        try { if (Test-Path $path) { return $path } }
+    foreach ($path in $paths) {
+        try { if (Test-Path -LiteralPath $path) { return $path } }
         catch { continue }
     }
     return $null
 }
 
-$bypassPrograms = @("cmd.exe", "powershell.exe", "powershell_ise.exe", "rundll32.exe", "regsvr32.exe", "taskmgr.exe", "LaunchTM.exe", "WinRAR.exe")
-$pattern = $bypassPrograms -join "|"
+$suspectPrograms = "cmd.exe", "powershell.exe", "powershell_ise.exe", "rundll32.exe", "regsvr32.exe", "taskmgr.exe", "LaunchTM.exe", "WinRAR.exe"
 
 $tasks = Get-ScheduledTask | ForEach-Object {
     $task = $_
-    $task.Actions | ForEach-Object {
-        $action = $_
-        $suspect = if ($action.Execute -match $pattern) { "Yes" } else { "No" }
-        
-        $signed = "N/A"
-        if ($action.Execute) {
-            $resolvedPath = Resolve-ExecutablePath -ExecutablePath $action.Execute
-            $signed = if ($resolvedPath) { Test-FileSignature -FilePath $resolvedPath } else { "Invalid Path" }
-        }
-        
-        [PSCustomObject]@{
-            TaskName = $task.TaskName
-            TaskPath = $task.TaskPath
-            Action = $action.Execute
-            Arguments = $action.Arguments
-            Suspicion = $suspect
-            Signed = $signed
+    if ($task.Actions) {
+        $task.Actions | ForEach-Object {
+            $exeName = if ($_.Execute) { [System.IO.Path]::GetFileName($_.Execute.Trim('"')) } else { "" }
+            $exePath = Get-FullPath $_.Execute
+            [PSCustomObject]@{
+                TaskName = $task.TaskName
+                TaskPath = $task.TaskPath  
+                Action = $_.Execute
+                Arguments = $_.Arguments
+                Suspicion = if ($suspectPrograms -contains $exeName) { "Yes" } else { "No" }
+                Signed = if ($exePath) { if (Test-Signature $exePath) { "Yes" } else { "No" } } else { "Invalid Path" }
+            }
         }
     }
 }
 
 if ($tasks) {
-    $tasks | Out-GridView -Title "Scheduler Parser - Signed: Yes=Valid, No=Not Signed, Other=Issues" -PassThru
+    $tasks | Out-GridView -Title "Scheduler Parser - Check signed column" -PassThru
 } else {
     Write-Host "No tasks found"
 }
