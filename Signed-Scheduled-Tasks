@@ -1,3 +1,5 @@
+# Borrowed base scipt from nolww and added sig checks
+
 Start-Sleep -Seconds 1
 Write-Host "Optimized by Lily (the BEST sser****)" -ForegroundColor Red
 Write-Host "Analyzing scheduled tasks..." -ForegroundColor Red
