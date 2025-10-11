@@ -24,9 +24,7 @@ $Global:ZoneIdentifierCache = @{}
 $LogBuffer = [System.Collections.Generic.List[string]]::new()
 
 $SuspiciousKeywords = @("clicker", "vape", "cheat", "hack", "inject", "bot", "macro", "manthe", "ghost", "spoofer", "aim", "killaura", "keyauth", "velocity", "scaffold")
-
 $SuspiciousSigners = @("manthe", "cheat", "hack", "inject", "spoofer", "ghost")
-
 $SpoofedExtensions = @(".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar", ".wsf", ".cpl", ".com", ".pif")
 
 $HighPriorityFolders = @(
@@ -626,133 +624,164 @@ function Export-JsonResults {
 function Show-ResultsGUI {
     param([array]$Results)
     
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
 
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = "Suspicious Executed Files Scan Results"
-    $form.Size = New-Object System.Drawing.Size(1400, 700)
-    $form.StartPosition = "CenterScreen"
-    $form.MaximizeBox = $true
-    $form.MinimizeBox = $true
+        $form = New-Object System.Windows.Forms.Form
+        $form.Text = "Suspicious Executed Files Scan Results"
+        $form.Size = New-Object System.Drawing.Size(1200, 600)
+        $form.StartPosition = "CenterScreen"
+        $form.MaximizeBox = $true
+        $form.MinimizeBox = $true
 
-    $dataGridView = New-Object System.Windows.Forms.DataGridView
-    $dataGridView.Location = New-Object System.Drawing.Point(10, 10)
-    $dataGridView.Size = New-Object System.Drawing.Size(1360, 550)
-    $dataGridView.AutoSizeColumnsMode = "Fill"
-    $dataGridView.SelectionMode = "FullRowSelect"
-    $dataGridView.ReadOnly = $true
-    $dataGridView.AllowUserToAddRows = $false
-    $dataGridView.AllowUserToDeleteRows = $false
-    $dataGridView.RowHeadersVisible = $false
+        $dataGridView = New-Object System.Windows.Forms.DataGridView
+        $dataGridView.Location = New-Object System.Drawing.Point(10, 40)
+        $dataGridView.Size = New-Object System.Drawing.Size(1160, 450)
+        $dataGridView.AutoSizeColumnsMode = "Fill"
+        $dataGridView.SelectionMode = "FullRowSelect"
+        $dataGridView.ReadOnly = $true
+        $dataGridView.AllowUserToAddRows = $false
+        $dataGridView.AllowUserToDeleteRows = $false
+        $dataGridView.RowHeadersVisible = $false
+        $dataGridView.AllowUserToResizeRows = $false
 
-    $columns = @(
-        @{Name="Timestamp"; HeaderText="Timestamp"},
-        @{Name="FullPath"; HeaderText="File Path"},
-        @{Name="Signature"; HeaderText="Signature"},
-        @{Name="SHA256"; HeaderText="SHA256"},
-        @{Name="Source"; HeaderText="Source"},
-        @{Name="SuspiciousActivity"; HeaderText="Suspicious Activity"},
-        @{Name="Priority"; HeaderText="Priority"},
-        @{Name="Confidence"; HeaderText="Confidence"}
-    )
+        $columns = @(
+            @{Name="Source"; HeaderText="Source"; Width=80},
+            @{Name="FullPath"; HeaderText="File Path"; Width=400},
+            @{Name="Signature"; HeaderText="Signature"; Width=150},
+            @{Name="SuspiciousActivity"; HeaderText="Suspicious Activity"; Width=200},
+            @{Name="Priority"; HeaderText="Priority"; Width=70},
+            @{Name="Confidence"; HeaderText="Confidence"; Width=80}
+        )
 
-    foreach ($column in $columns) {
-        $col = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
-        $col.Name = $column.Name
-        $col.HeaderText = $column.HeaderText
-        $dataGridView.Columns.Add($col) | Out-Null
-    }
+        foreach ($column in $columns) {
+            $col = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+            $col.Name = $column.Name
+            $col.HeaderText = $column.HeaderText
+            if ($column.Width) { $col.Width = $column.Width }
+            $dataGridView.Columns.Add($col) | Out-Null
+        }
 
-    $dataGridView.Add_CellFormatting({
-        param($sender, $e)
-        
-        if ($e.ColumnIndex -eq 5) {
-            $activity = $sender.Rows[$e.RowIndex].Cells[5].Value
-            if ($activity -ne "N/A" -and $activity -ne $null) {
-                if ($activity -match "SUSPICIOUS_KEYWORD_") {
-                    $e.CellStyle.BackColor = [System.Drawing.Color]::Red
-                    $e.CellStyle.ForeColor = [System.Drawing.Color]::White
-                } else {
-                    $e.CellStyle.BackColor = [System.Drawing.Color]::LightCoral
+        $filterLabel = New-Object System.Windows.Forms.Label
+        $filterLabel.Location = New-Object System.Drawing.Point(10, 15)
+        $filterLabel.Size = New-Object System.Drawing.Size(100, 20)
+        $filterLabel.Text = "Filter:"
+
+        $filterTextBox = New-Object System.Windows.Forms.TextBox
+        $filterTextBox.Location = New-Object System.Drawing.Point(50, 12)
+        $filterTextBox.Size = New-Object System.Drawing.Size(200, 20)
+
+        $dataGridView.Add_CellFormatting({
+            param($sender, $e)
+            
+            if ($e.ColumnIndex -eq 3) {
+                $activity = $sender.Rows[$e.RowIndex].Cells[3].Value
+                if ($activity -ne "N/A" -and $activity -ne $null) {
+                    if ($activity -match "SUSPICIOUS_KEYWORD_") {
+                        $e.CellStyle.BackColor = [System.Drawing.Color]::Red
+                        $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                    } else {
+                        $e.CellStyle.BackColor = [System.Drawing.Color]::LightCoral
+                    }
                 }
             }
-        }
-        
-        if ($e.ColumnIndex -eq 2) {
-            $signature = $sender.Rows[$e.RowIndex].Cells[2].Value
-            if ($signature -match "SUSPICIOUS_SIGNER") {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::LightYellow
+            
+            if ($e.ColumnIndex -eq 2) {
+                $signature = $sender.Rows[$e.RowIndex].Cells[2].Value
+                if ($signature -match "SUSPICIOUS_SIGNER") {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::LightYellow
+                }
             }
-        }
-        
-        if ($e.ColumnIndex -eq 6) {
-            $priority = $sender.Rows[$e.RowIndex].Cells[6].Value
-            if ($priority -gt 1000) {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::DarkRed
-                $e.CellStyle.ForeColor = [System.Drawing.Color]::White
-            } elseif ($priority -gt 500) {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::OrangeRed
-                $e.CellStyle.ForeColor = [System.Drawing.Color]::White
-            } elseif ($priority -gt 200) {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::Orange
+            
+            if ($e.ColumnIndex -eq 4) {
+                $priority = $sender.Rows[$e.RowIndex].Cells[4].Value
+                if ($priority -gt 1000) {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::DarkRed
+                    $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                } elseif ($priority -gt 500) {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::OrangeRed
+                    $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                } elseif ($priority -gt 200) {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::Orange
+                }
             }
-        }
-        
-        if ($e.ColumnIndex -eq 7) {
-            $confidence = $sender.Rows[$e.RowIndex].Cells[7].Value
-            if ($confidence -eq "HIGH") {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::Red
-                $e.CellStyle.ForeColor = [System.Drawing.Color]::White
-            } elseif ($confidence -eq "MEDIUM") {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::Orange
-            } elseif ($confidence -eq "LOW") {
-                $e.CellStyle.BackColor = [System.Drawing.Color]::LightYellow
+            
+            if ($e.ColumnIndex -eq 5) {
+                $confidence = $sender.Rows[$e.RowIndex].Cells[5].Value
+                if ($confidence -eq "HIGH") {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::Red
+                    $e.CellStyle.ForeColor = [System.Drawing.Color]::White
+                } elseif ($confidence -eq "MEDIUM") {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::Orange
+                } elseif ($confidence -eq "LOW") {
+                    $e.CellStyle.BackColor = [System.Drawing.Color]::LightYellow
+                }
             }
-        }
-    })
+        })
 
-    $dataSource = $Results | Sort-Object Priority -Descending | Select-Object Timestamp, FullPath, Signature, SHA256, Source, SuspiciousActivity, Priority, Confidence
-    $dataGridView.DataSource = [System.Collections.ArrayList]@($dataSource)
+        $filterTextBox.Add_TextChanged({
+            $filter = $filterTextBox.Text
+            if ([string]::IsNullOrWhiteSpace($filter)) {
+                $dataGridView.DataSource = [System.Collections.ArrayList]@($dataSource)
+            } else {
+                $filtered = $dataSource | Where-Object { 
+                    $_.FullPath -match $filter -or 
+                    $_.Source -match $filter -or
+                    $_.SuspiciousActivity -match $filter
+                }
+                $dataGridView.DataSource = [System.Collections.ArrayList]@($filtered)
+            }
+        })
 
-    $summaryLabel = New-Object System.Windows.Forms.Label
-    $summaryLabel.Location = New-Object System.Drawing.Point(10, 570)
-    $summaryLabel.Size = New-Object System.Drawing.Size(1000, 20)
-    $suspiciousCount = ($Results | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
-    $unsignedCount = ($Results | Where-Object { $_.Signature -match "Unsigned" }).Count
-    $suspiciousSignerCount = ($Results | Where-Object { $_.Signature -match "SUSPICIOUS_SIGNER" }).Count
-    $keywordCount = ($Results | Where-Object { $_.SuspiciousActivity -match "SUSPICIOUS_KEYWORD_" }).Count
-    $highConfidenceCount = ($Results | Where-Object { $_.Confidence -eq "HIGH" }).Count
-    
-    $summaryLabel.Text = "Files: $($Results.Count) | Suspicious: $suspiciousCount | High Confidence: $highConfidenceCount | Keywords: $keywordCount | Unsigned: $unsignedCount | Bad Signers: $suspiciousSignerCount"
+        $dataSource = $Results | Sort-Object Priority -Descending | Select-Object Source, FullPath, Signature, SuspiciousActivity, Priority, Confidence
+        $dataGridView.DataSource = [System.Collections.ArrayList]@($dataSource)
 
-    $closeButton = New-Object System.Windows.Forms.Button
-    $closeButton.Location = New-Object System.Drawing.Point(1250, 570)
-    $closeButton.Size = New-Object System.Drawing.Size(120, 30)
-    $closeButton.Text = "Close"
-    $closeButton.Add_Click({ $form.Close() })
+        $summaryLabel = New-Object System.Windows.Forms.Label
+        $summaryLabel.Location = New-Object System.Drawing.Point(10, 500)
+        $summaryLabel.Size = New-Object System.Drawing.Size(800, 20)
+        $suspiciousCount = ($Results | Where-Object { $_.SuspiciousActivity -ne "N/A" }).Count
+        $unsignedCount = ($Results | Where-Object { $_.Signature -match "Unsigned" }).Count
+        $suspiciousSignerCount = ($Results | Where-Object { $_.Signature -match "SUSPICIOUS_SIGNER" }).Count
+        $keywordCount = ($Results | Where-Object { $_.SuspiciousActivity -match "SUSPICIOUS_KEYWORD_" }).Count
+        $highConfidenceCount = ($Results | Where-Object { $_.Confidence -eq "HIGH" }).Count
+        
+        $summaryLabel.Text = "Files: $($Results.Count) | Suspicious: $suspiciousCount | High Confidence: $highConfidenceCount | Keywords: $keywordCount | Unsigned: $unsignedCount | Bad Signers: $suspiciousSignerCount"
 
-    $exportButton = New-Object System.Windows.Forms.Button
-    $exportButton.Location = New-Object System.Drawing.Point(1120, 570)
-    $exportButton.Size = New-Object System.Drawing.Size(120, 30)
-    $exportButton.Text = "Export to CSV"
-    $exportButton.Add_Click({
-        $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
-        $saveFileDialog.Filter = "CSV files (*.csv)|*.csv"
-        $saveFileDialog.FileName = "SuspiciousFiles_Export_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
-        if ($saveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-            $Results | Export-Csv -Path $saveFileDialog.FileName -NoTypeInformation
-            [System.Windows.Forms.MessageBox]::Show("Data exported to: $($saveFileDialog.FileName)", "Export Complete", "OK", "Information")
-        }
-    })
+        $closeButton = New-Object System.Windows.Forms.Button
+        $closeButton.Location = New-Object System.Drawing.Point(1050, 500)
+        $closeButton.Size = New-Object System.Drawing.Size(120, 30)
+        $closeButton.Text = "Close"
+        $closeButton.Add_Click({ $form.Close() })
 
-    $form.Controls.Add($dataGridView)
-    $form.Controls.Add($summaryLabel)
-    $form.Controls.Add($closeButton)
-    $form.Controls.Add($exportButton)
+        $exportButton = New-Object System.Windows.Forms.Button
+        $exportButton.Location = New-Object System.Drawing.Point(920, 500)
+        $exportButton.Size = New-Object System.Drawing.Size(120, 30)
+        $exportButton.Text = "Export to CSV"
+        $exportButton.Add_Click({
+            $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+            $saveFileDialog.Filter = "CSV files (*.csv)|*.csv"
+            $saveFileDialog.FileName = "SuspiciousFiles_Export_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+            if ($saveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                $Results | Export-Csv -Path $saveFileDialog.FileName -NoTypeInformation
+                [System.Windows.Forms.MessageBox]::Show("Data exported to: $($saveFileDialog.FileName)", "Export Complete", "OK", "Information")
+            }
+        })
 
-    $form.Add_Shown({$form.Activate()})
-    $form.ShowDialog() | Out-Null
+        $form.Controls.Add($dataGridView)
+        $form.Controls.Add($filterLabel)
+        $form.Controls.Add($filterTextBox)
+        $form.Controls.Add($summaryLabel)
+        $form.Controls.Add($closeButton)
+        $form.Controls.Add($exportButton)
+
+        $form.Add_Shown({$form.Activate()})
+        $form.ShowDialog() | Out-Null
+    }
+    catch {
+        Write-Log "GUI Error: $($_.Exception.Message)"
+        Write-Host "GUI failed to load. Check output files for results." -ForegroundColor Red
+    }
 }
 
 Write-Log "Starting focused suspicious executed files scan..."
@@ -760,7 +789,7 @@ Write-Log "Output file: $OutputFile"
 
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
-    Write-Warning "Not running as administrator. Some artifacts may not be accessible."
+    Write-Log "Not running as administrator. Some artifacts may not be accessible."
 }
 
 if (Test-Path $OutputFile) {
