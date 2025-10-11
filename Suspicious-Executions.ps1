@@ -30,9 +30,7 @@ $SpoofedExtensions = @(".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar", ".
 $HighPriorityFolders = @(
     "$env:USERPROFILE\Downloads",
     "$env:USERPROFILE\AppData\Local\Temp", 
-    "$env:TEMP",
-    "$env:USERPROFILE\AppData\Local\Microsoft\Windows\INetCache",
-    "$env:USERPROFILE\AppData\Roaming"
+    "$env:TEMP"
 )
 
 if (-not (Test-Path $OutputDirectory)) {
@@ -268,8 +266,8 @@ function Get-SuspiciousPriority {
     $priority = 0
     
     if ($SuspiciousActivity -match "SUSPICIOUS_KEYWORD_") { $priority += 1000 }
-    if ($SuspiciousActivity -match "SPOOFED_EXTENSION_") { $priority += 500 }
-    if ($SuspiciousActivity -match "SUSPICIOUS_SIGNER") { $priority += 300 }
+    if ($SuspiciousActivity -match "SPOOFED_EXTENSION_") { $priority += 250 }
+    if ($SuspiciousActivity -match "SUSPICIOUS_SIGNER") { $priority += 1000 }
     if ($SuspiciousActivity -match "HIGH_ENTROPY") { $priority += 200 }
     if ($SuspiciousActivity -match "CONTAINS_") { $priority += 150 }
     if ($SuspiciousActivity -match "Internet_Download") { $priority += 175 }
@@ -456,37 +454,6 @@ function Get-BAMEntries {
     
     return $results
 }
-
-function Get-RunningProcesses {
-    Write-Log "Scanning running processes for suspicious activity..."
-    $results = @()
-    
-    try {
-        $processes = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -ne $null }
-        
-        foreach ($process in $processes) {
-            $result = Evaluate-FileSuspicion -FilePath $process.Path -Source "Running_Process" -ArtifactFile "Memory" -Timestamp (Get-Date)
-            if ($result) { 
-                $results += $result 
-            }
-        }
-        
-        $suspiciousProcesses = $processes | Where-Object { 
-            $_.ProcessName -match 'vape|inject|spoofer|ghost|cheat|macro|clicker' -or
-            $_.Path -match 'vape|inject|spoofer|ghost|cheat|macro|clicker'
-        }
-        
-        foreach ($proc in $suspiciousProcesses) {
-            Write-Log "Suspicious process detected: $($proc.ProcessName) - $($proc.Path)"
-        }
-    }
-    catch {
-        Write-Log "Error scanning running processes: $($_.Exception.Message)"
-    }
-    
-    return $results
-}
-
 function Get-EventLogExecutions {
     Write-Log "Scanning Event Logs for process executions..."
     $results = @()
@@ -804,7 +771,6 @@ Write-Log "Collecting data from execution artifacts..."
 
 $Artifacts += Get-PrefetchFiles
 $Artifacts += Get-BAMEntries
-$Artifacts += Get-RunningProcesses
 $Artifacts += Get-EventLogExecutions
 $Artifacts += Get-StartupItems
 $Artifacts += Get-PowerShellHistory
