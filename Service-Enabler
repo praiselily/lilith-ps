@@ -1,4 +1,15 @@
-
+Write-Host @"
+___       ___  ___       ___  _________  ___  ___     
+|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
+\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
+ \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
+  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
+   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
+    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
+Made with love by lily<3                                                       
+                                                       
+                                                       
+"@ -ForegroundColor Cyan
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
