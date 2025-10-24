@@ -16,7 +16,8 @@ Add-Type -AssemblyName System.Drawing
 
 $servicesToCheck = @(
     "SysMain","PcaSvc","DPS","EventLog","Schedule","Bam","wsearch",
-    "Appinfo","SSDPSRV","CDPSvc","DcomLaunch","PlugPlay"
+    "Appinfo","SSDPSRV","CDPSvc","DcomLaunch","PlugPlay",
+    "DiagTrack","DusmSvc"
 )
 
 $form = New-Object System.Windows.Forms.Form
@@ -100,6 +101,8 @@ $serviceDescriptions = @{
     "CDPSvc" = "Connected Devices Platform"
     "DcomLaunch" = "DCOM Server Process Launcher"
     "PlugPlay" = "Plug and Play"
+    "DiagTrack" = "Connected User Experiences and Telemetry"
+    "DusmSvc" = "Data Usage Service"
 }
 
 function Refresh-Services {
