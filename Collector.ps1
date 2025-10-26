@@ -24,17 +24,21 @@ function Download-File {
     
     try {
         $outputPath = Join-Path $DownloadPath $FileName
+        $ProgressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $Url -OutFile $outputPath -UserAgent "PowerShell" -UseBasicParsing | Out-Null
         
         if ($FileName -like "*.zip") {
             $extractPath = Join-Path $DownloadPath ($FileName -replace '\.zip$', '')
             Expand-Archive -Path $outputPath -DestinationPath $extractPath -Force | Out-Null
-            Remove-Item $outputPath | Out-Null
+            Remove-Item $outputPath -Force | Out-Null
         }
         return $true
     }
     catch {
         return $false
+    }
+    finally {
+        $ProgressPreference = 'Continue'
     }
 }
 
@@ -48,18 +52,22 @@ function Download-Tools {
         $scriptBlock = {
             param($Url, $FileName, $ToolName, $DownloadPath)
             try {
+                $ProgressPreference = 'SilentlyContinue'
                 $outputPath = Join-Path $DownloadPath $FileName
                 Invoke-WebRequest -Uri $Url -OutFile $outputPath -UserAgent "PowerShell" -UseBasicParsing | Out-Null
                 
                 if ($FileName -like "*.zip") {
                     $extractPath = Join-Path $DownloadPath ($FileName -replace '\.zip$', '')
                     Expand-Archive -Path $outputPath -DestinationPath $extractPath -Force | Out-Null
-                    Remove-Item $outputPath | Out-Null
+                    Remove-Item $outputPath -Force | Out-Null
                 }
                 return $true
             }
             catch {
                 return $false
+            }
+            finally {
+                $ProgressPreference = 'Continue'
             }
         }
         
@@ -69,14 +77,13 @@ function Download-Tools {
     
     Write-Host "Downloading $CategoryName tools..." -NoNewline
     
-    $completed = 0
     while ($jobs.Job.State -contains "Running") {
         Start-Sleep -Milliseconds 100
     }
     
     foreach ($jobInfo in $jobs) {
         $result = Receive-Job -Job $jobInfo.Job
-        Remove-Job -Job $jobInfo.Job | Out-Null
+        Remove-Job -Job $jobInfo.Job -Force | Out-Null
         if ($result) { $successCount++ }
     }
     
@@ -121,9 +128,12 @@ $otherTools = @(
     @{ Name="FTK Imager"; Url="https://d1kpmuwb7gvu1i.cloudfront.net/AccessData_FTK_Imager_4.7.1.exe"; File="AccessData_FTK_Imager_4.7.1.exe" }
 )
 
+
 $response = Read-Host "`nDo you want to download Spokwn's tools? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $spowksucksasscheeks -CategoryName "Spokwn's"
+} else {
+    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 $response = Read-Host "`nDo you want to download Zimmerman's tools? (Y/N)"
@@ -135,12 +145,18 @@ if ($response -match '^[Yy]') {
         Write-Host "Downloading .NET Runtime..." -NoNewline
         $netResult = Download-File -Url "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.306/dotnet-sdk-9.0.306-win-x64.exe" -FileName "dotnet-sdk-9.0.306-win-x64.exe" -ToolName ".NET Runtime"
         Write-Host " Done" -ForegroundColor Green
+    } else {
+        Write-Host "Skipping" -ForegroundColor Yellow
     }
+} else {
+    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 $response = Read-Host "`nDo you want to download Nirsoft tools? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $nirsoftTools -CategoryName "Nirsoft"
+} else {
+    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 Write-Host "`nNote: hayabusa might flag as a virus (its very safe n open source)" -ForegroundColor Yellow
@@ -149,11 +165,15 @@ if ($response -match '^[Yy]') {
     Write-Host "Downloading Hayabusa..." -NoNewline
     $hayabusaResult = Download-File -Url "https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip" -FileName "hayabusa-3.6.0-win-x64.zip" -ToolName "Hayabusa"
     Write-Host " Done" -ForegroundColor Green
+} else {
+    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 $response = Read-Host "`nDo you want to download other common tools (i couldnt think of a category)? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $otherTools -CategoryName "Other Common"
+} else {
+    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 Write-Host "`nhit up @praiselily if u got ideas for tools to add" -ForegroundColor Cyan
