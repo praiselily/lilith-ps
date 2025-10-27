@@ -1,12 +1,3 @@
-Write-Host @"
-___       ___  ___       ___  _________  ___  ___     
-|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
-\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
- \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
-  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
-   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
-    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
-"@ -ForegroundColor Cyan 
 Write-Host "Made with love by Lily<3" -ForegroundColor Magenta                                                     
 Write-Host @"                                                       
     Heads up, some of the tools (BAM Parser and Hayabusa)
