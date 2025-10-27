@@ -1,8 +1,8 @@
 Write-Host "Made with love by Lily<3" -ForegroundColor Magenta                                                     
 Write-Host @"                                                       
-    Heads up, some of the tools (BAM Parser and Hayabusa)
-    will flag as a virus, they are not. If you wish to 
-    install them, toggle your antivirus before execution.
+    if the av exlcusion doesnt work on your system a few tools
+    might flag as a virus (bam parser and hayabusa). They arent
+    though, everything is from trusted open source software
 "@ -ForegroundColor Cyan
 
 
