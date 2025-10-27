@@ -14,9 +14,104 @@ Write-Host @"
     install them, toggle your antivirus before execution.
 "@ -ForegroundColor Cyan
 
+
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "This script requires Administrator privileges." -ForegroundColor Yellow
+    Write-Host "Restarting as Administrator" -ForegroundColor Yellow
+    
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "PowerShell"
+    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
+    $psi.Verb = "RunAs"
+    
+    try {
+        [System.Diagnostics.Process]::Start($psi) | Out-Null
+        exit
+    }
+    catch {
+        Write-Host "no admin" -ForegroundColor Red
+    }
+}
+
 $DownloadPath = "C:\Screenshare"
 if (!(Test-Path $DownloadPath)) {
     New-Item -ItemType Directory -Path $DownloadPath -Force | Out-Null
+}
+
+
+function Add-DefenderExclusion {
+    Write-Host "`nSetting up antivirus exclusion" -ForegroundColor Cyan
+    Write-Host "Adding Windows Defender exclusion for $DownloadPath" -NoNewline
+    
+    $success = $false
+    
+
+    try {
+        if (Get-Command Get-MpPreference -ErrorAction SilentlyContinue) {
+            $existingExclusions = (Get-MpPreference -ErrorAction Stop).ExclusionPath
+            if ($existingExclusions -notcontains $DownloadPath) {
+                Add-MpPreference -ExclusionPath $DownloadPath -ErrorAction Stop
+            }
+            Write-Host " Success" -ForegroundColor Green
+            $success = $true
+        }
+    }
+    catch {
+      
+    }
+    
+  
+    if (-not $success) {
+        try {
+            $regPath = "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths"
+            if (Test-Path $regPath) {
+                $existingValue = Get-ItemProperty -Path $regPath -Name $DownloadPath -ErrorAction SilentlyContinue
+                if (-not $existingValue) {
+                    New-ItemProperty -Path $regPath -Name $DownloadPath -Value 0 -PropertyType DWORD -Force -ErrorAction Stop | Out-Null
+                }
+                Write-Host " Success" -ForegroundColor Green
+                $success = $true
+            }
+        }
+        catch {
+           
+        }
+    }
+    
+    
+    if (-not $success) {
+        try {
+            $namespace = "root\Microsoft\Windows\Defender"
+            if (Get-WmiObject -Namespace $namespace -List -ErrorAction SilentlyContinue) {
+                $defender = Get-WmiObject -Namespace $namespace -Class "MSFT_MpPreference" -ErrorAction Stop
+                $defender.AddExclusionPath($DownloadPath)
+                Write-Host " Success" -ForegroundColor Green
+                $success = $true
+            }
+        }
+        catch {
+           
+        }
+    }
+    
+    if (-not $success) {
+        Write-Host " Failed" -ForegroundColor Red
+        
+    }
+    
+    return $success
+}
+
+
+$exclusionAdded = Add-DefenderExclusion
+
+if (-not $exclusionAdded) {
+    Write-Host "`nCould not add automatic antivirus exclusion, you are prolly using some 3rd party av." -ForegroundColor Yellow
+    Write-Host "`nContinuing with downloads (some might be deleted)" -ForegroundColor Yellow
+    Start-Sleep -Seconds 3
+} else {
+    
 }
 
 function Download-File {
@@ -24,6 +119,7 @@ function Download-File {
     
     try {
         $outputPath = Join-Path $DownloadPath $FileName
+        Write-Host "  Downloading $ToolName" -NoNewline
         $ProgressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $Url -OutFile $outputPath -UserAgent "PowerShell" -UseBasicParsing | Out-Null
         
@@ -32,9 +128,11 @@ function Download-File {
             Expand-Archive -Path $outputPath -DestinationPath $extractPath -Force | Out-Null
             Remove-Item $outputPath -Force | Out-Null
         }
+        Write-Host " Done" -ForegroundColor Green
         return $true
     }
     catch {
+        Write-Host " Failed" -ForegroundColor Red
         return $false
     }
     finally {
@@ -46,49 +144,15 @@ function Download-Tools {
     param([array]$Tools, [string]$CategoryName)
     
     $successCount = 0
-    $jobs = @()
     
+    Write-Host "`nDownloading $CategoryName tools" -ForegroundColor Cyan
     foreach ($tool in $Tools) {
-        $scriptBlock = {
-            param($Url, $FileName, $ToolName, $DownloadPath)
-            try {
-                $ProgressPreference = 'SilentlyContinue'
-                $outputPath = Join-Path $DownloadPath $FileName
-                Invoke-WebRequest -Uri $Url -OutFile $outputPath -UserAgent "PowerShell" -UseBasicParsing | Out-Null
-                
-                if ($FileName -like "*.zip") {
-                    $extractPath = Join-Path $DownloadPath ($FileName -replace '\.zip$', '')
-                    Expand-Archive -Path $outputPath -DestinationPath $extractPath -Force | Out-Null
-                    Remove-Item $outputPath -Force | Out-Null
-                }
-                return $true
-            }
-            catch {
-                return $false
-            }
-            finally {
-                $ProgressPreference = 'Continue'
-            }
+        if (Download-File -Url $tool.Url -FileName $tool.File -ToolName $tool.Name) {
+            $successCount++
         }
-        
-        $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $tool.Url, $tool.File, $tool.Name, $DownloadPath
-        $jobs += @{ Job = $job; Name = $tool.Name }
     }
     
-    Write-Host "Downloading $CategoryName tools..." -NoNewline
-    
-    while ($jobs.Job.State -contains "Running") {
-        Start-Sleep -Milliseconds 100
-    }
-    
-    foreach ($jobInfo in $jobs) {
-        $result = Receive-Job -Job $jobInfo.Job
-        Remove-Job -Job $jobInfo.Job -Force | Out-Null
-        if ($result) { $successCount++ }
-    }
-    
-    Write-Host " Done" -ForegroundColor Green
-    Write-Host "  $successCount/$($Tools.Count) tools downloaded successfully" -ForegroundColor Cyan
+    Write-Host ($CategoryName + ": " + $successCount + "/" + $Tools.Count + " tools downloaded successfully") -ForegroundColor Cyan
 }
 
 $spowksucksasscheeks = @(
@@ -110,7 +174,8 @@ $zimmermanTools = @(
     @{ Name="bstrings"; Url="https://download.ericzimmermanstools.com/net9/bstrings.zip"; File="bstrings.zip" },
     @{ Name="PECmd"; Url="https://download.ericzimmermanstools.com/net9/PECmd.zip"; File="PECmd.zip" },
     @{ Name="SrumECmd"; Url="https://download.ericzimmermanstools.com/net9/SrumECmd.zip"; File="SrumECmd.zip" },
-    @{ Name="TimelineExplorer"; Url="https://download.ericzimmermanstools.com/net9/TimelineExplorer.zip"; File="TimelineExplorer.zip" }
+    @{ Name="TimelineExplorer"; Url="https://download.ericzimmermanstools.com/net9/TimelineExplorer.zip"; File="TimelineExplorer.zip" },
+    @{ Name="RegisryExplorer"; Url="https://download.ericzimmermanstools.com/net9/RegistryExplorer.zip"; File="RegistryExplorer.zip.zip" }
 )
 
 $nirsoftTools = @(
@@ -132,8 +197,6 @@ $otherTools = @(
 $response = Read-Host "`nDo you want to download Spokwn's tools? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $spowksucksasscheeks -CategoryName "Spokwn's"
-} else {
-    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 $response = Read-Host "`nDo you want to download Zimmerman's tools? (Y/N)"
@@ -142,39 +205,31 @@ if ($response -match '^[Yy]') {
     
     $runtimeResponse = Read-Host "`nWould you like to install the .NET Runtime (required for zimmerman) (Y/N)"
     if ($runtimeResponse -match '^[Yy]') {
-        Write-Host "Downloading .NET Runtime..." -NoNewline
-        $netResult = Download-File -Url "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.306/dotnet-sdk-9.0.306-win-x64.exe" -FileName "dotnet-sdk-9.0.306-win-x64.exe" -ToolName ".NET Runtime"
-        Write-Host " Done" -ForegroundColor Green
-    } else {
-        Write-Host "Skipping" -ForegroundColor Yellow
+        Download-File -Url "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.306/dotnet-sdk-9.0.306-win-x64.exe" -FileName "dotnet-sdk-9.0.306-win-x64.exe" -ToolName ".NET Runtime"
     }
-} else {
-    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 $response = Read-Host "`nDo you want to download Nirsoft tools? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $nirsoftTools -CategoryName "Nirsoft"
-} else {
-    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
 Write-Host "`nNote: hayabusa might flag as a virus (its very safe n open source)" -ForegroundColor Yellow
 $response = Read-Host "Do you want to download Hayabusa? (Y/N)"
 if ($response -match '^[Yy]') {
-    Write-Host "Downloading Hayabusa..." -NoNewline
-    $hayabusaResult = Download-File -Url "https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip" -FileName "hayabusa-3.6.0-win-x64.zip" -ToolName "Hayabusa"
-    Write-Host " Done" -ForegroundColor Green
-} else {
-    Write-Host "Skipping" -ForegroundColor Yellow
+    Download-File -Url "https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip" -FileName "hayabusa-3.6.0-win-x64.zip" -ToolName "Hayabusa"
 }
 
 $response = Read-Host "`nDo you want to download other common tools (i couldnt think of a category)? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $otherTools -CategoryName "Other Common"
-} else {
-    Write-Host "Skipping" -ForegroundColor Yellow
 }
 
-Write-Host "`nhit up @praiselily if u got ideas for tools to add" -ForegroundColor Cyan
-Write-Host "Doownloads are located in: $DownloadPath" -ForegroundColor Cyan
+Write-Host "`nHit up @praiselily if u got ideas for tools to add" -ForegroundColor Cyan
+Write-Host "Downloads are located in: $DownloadPath" -ForegroundColor Cyan
+
+if ($exclusionAdded) {
+    Write-Host "Antivirus exclusion successfully added!" -ForegroundColor Green
+} else {
+    Write-Host "`nRemember to manually disable real-time protection if tools get deleted!" -ForegroundColor Yellow
+}
