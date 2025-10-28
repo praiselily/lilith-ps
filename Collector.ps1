@@ -227,8 +227,3 @@ if ($response -match '^[Yy]') {
 Write-Host "`nHit up @praiselily if u got ideas for tools to add" -ForegroundColor Cyan
 Write-Host "Downloads are located in: $DownloadPath" -ForegroundColor Cyan
 
-if ($exclusionAdded) {
-    Write-Host "Antivirus exclusion successfully added!" -ForegroundColor Green
-} else {
-    Write-Host "`nRemember to manually disable real-time protection if tools get deleted!" -ForegroundColor Yellow
-}
