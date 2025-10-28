@@ -1,10 +1,10 @@
-Write-Host "Made with love by Lily<3" -ForegroundColor Magenta                                                     
-Write-Host @"                                                       
-    if the av exlcusion doesnt work on your system a few tools
-    might flag as a virus (bam parser and hayabusa). They arent
-    though, everything is from trusted open source software
-"@ -ForegroundColor Cyan
+Write-Host "Made with love by Lily<3" -ForegroundColor Cyan                                                          
 
+"@ -ForegroundColor Cyan
+Write-Host @"
+!!!!! WARNING: MAKE SURE U HAVE THE SUSPECTS CONSENT BEFORE RUNNING, 
+SCRIPT WILL ADD C:\SCREENSHARE TO ANTIVIRUS EXCLUSIONS. !!!!!!!!
+"@ -ForegroundColor Red
 
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
