@@ -250,16 +250,16 @@ if (Test-Path $prefetchPath) {
 
         
         if ($hiddenAndReadOnlyFiles.Count -gt 0) {
-            Write-Host "  Hidden & Read-only Files: $($hiddenAndReadOnlyFiles.Count) found" -ForegroundColor Red
+            Write-Host "  Hidden & Read-only Files: $($hiddenAndReadOnlyFiles.Count) found" -ForegroundColor Yellow
             foreach ($file in $hiddenAndReadOnlyFiles) {
-                Write-Host ("    {0}" -f $file.Name) -ForegroundColor Red
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor White
             }
         }
 
         if ($hiddenFiles.Count -gt 0) {
             Write-Host "  Hidden Files: $($hiddenFiles.Count) found" -ForegroundColor Yellow
             foreach ($file in $hiddenFiles) {
-                Write-Host ("    {0}" -f $file.Name) -ForegroundColor DarkYellow
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor White
             }
         } else {
             Write-Host "  Hidden Files: None" -ForegroundColor Green
@@ -268,16 +268,16 @@ if (Test-Path $prefetchPath) {
         if ($readOnlyFiles.Count -gt 0) {
             Write-Host "  Read-Only Files: $($readOnlyFiles.Count)" -ForegroundColor Yellow
             foreach ($file in $readOnlyFiles) {
-                Write-Host ("    {0}" -f $file.Name) -ForegroundColor DarkYellow
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor White
             }
         } else {
             Write-Host "  Read-Only Files: None" -ForegroundColor Green
         }
 
         if ($invalidSignatureFiles.Count -gt 0) {
-            Write-Host "  Invalid Signatures: $($invalidSignatureFiles.Count)" -ForegroundColor Red
+            Write-Host "  Invalid Signatures: $($invalidSignatureFiles.Count)" -ForegroundColor Yellow
             foreach ($file in $invalidSignatureFiles) {
-                Write-Host ("    {0}" -f $file.Name) -ForegroundColor Red
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor White
             }
         } else {
             Write-Host "  File Signatures: All good" -ForegroundColor Green
@@ -293,7 +293,7 @@ if (Test-Path $prefetchPath) {
                         $suspiciousFiles[$file] = "Duplicate file"
                     }
                 }
-                Write-Host ("    Duplicate set: {0}" -f ($entry.Value -join ", ")) -ForegroundColor DarkYellow
+                Write-Host ("    Duplicate set: {0}" -f ($entry.Value -join ", ")) -ForegroundColor White
             }
         } else {
             Write-Host "  Duplicatess: None" -ForegroundColor Green
@@ -301,43 +301,90 @@ if (Test-Path $prefetchPath) {
 
         
         if ($suspiciousFiles.Count -gt 0) {
-            Write-Host "`n  SUSPICIOUS FILES FOUND: $($suspiciousFiles.Count)/$totalFiles" -ForegroundColor Red
+            Write-Host "`n  SUSPICIOUS FILES FOUND: $($suspiciousFiles.Count)/$totalFiles" -ForegroundColor Yellow
             foreach ($entry in $suspiciousFiles.GetEnumerator() | Sort-Object Key) {
-                Write-Host ("    {0} : {1}" -f $entry.Key, $entry.Value) -ForegroundColor Red
+                Write-Host ("    {0} : {1}" -f $entry.Key, $entry.Value) -ForegroundColor White
             }
         } else {
             Write-Host "`n  Prefetch integrity: Clean ($totalFiles files checked)" -ForegroundColor Green
         }
     }
 } else {
-    Write-Host "`nPrefetch folder not found" -ForegroundColor Red
+    Write-Host "`nCouldnt find prefetch folder?? (check yo paths hoe)" -ForegroundColor Red
 }
 
 try {
-    $recycleBinEvents = Get-WinEvent -FilterHashtable @{LogName="System"; Id=10006} -MaxEvents 1 -ErrorAction SilentlyContinue
+    
+    $recycleBinPath = "$env:SystemDrive" + '\$Recycle.Bin'
     
     Write-Host "`nRECYCLE BIN" -ForegroundColor Cyan
 
-    if ($recycleBinEvents) {
-        Write-Host "  Last Cleared: " -NoNewline -ForegroundColor White
-        Write-Host $recycleBinEvents.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Yellow
-    } else {
-        $recycleBinPath = "$env:SystemDrive`\$Recycle.Bin"
-        if (Test-Path $recycleBinPath) {
-            $recycleBinFolders = Get-ChildItem $recycleBinPath -Directory -ErrorAction SilentlyContinue
-            if ($recycleBinFolders) {
-                $latestMod = $recycleBinFolders | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-                Write-Host "  Last Modified: " -NoNewline -ForegroundColor White
-                Write-Host $latestMod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Green
+    if (Test-Path $recycleBinPath) {
+        
+        $recycleBinFolder = Get-Item -LiteralPath $recycleBinPath -Force
+        
+       
+        $userFolders = Get-ChildItem -LiteralPath $recycleBinPath -Directory -Force -ErrorAction SilentlyContinue
+        
+        if ($userFolders) {
+           
+            $allDeletedItems = @()
+            $latestModTime = $recycleBinFolder.LastWriteTime
+            
+            foreach ($userFolder in $userFolders) {
+                
+                if ($userFolder.LastWriteTime -gt $latestModTime) {
+                    $latestModTime = $userFolder.LastWriteTime
+                }
+                
+                
+                $userItems = Get-ChildItem -LiteralPath $userFolder.FullName -File -Force -ErrorAction SilentlyContinue
+                if ($userItems) {
+                    $allDeletedItems += $userItems
+                    
+                    $latestFile = $userItems | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                    if ($latestFile -and $latestFile.LastWriteTime -gt $latestModTime) {
+                        $latestModTime = $latestFile.LastWriteTime
+                    }
+                }
+            }
+            
+            Write-Host "  Last Modified: " -NoNewline -ForegroundColor White
+            Write-Host $latestModTime.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Yellow
+            
+            if ($allDeletedItems.Count -gt 0) {
+                Write-Host "  Total Items: " -NoNewline -ForegroundColor White
+                Write-Host $allDeletedItems.Count -ForegroundColor Yellow
+                
+                
+                $latestItem = $allDeletedItems | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                Write-Host "  Latest Item: " -NoNewline -ForegroundColor White
+                Write-Host $latestItem.Name -ForegroundColor Gray
             } else {
-                Write-Host "  Recycle Bin: Empty" -ForegroundColor Green
+                Write-Host "  Status: " -NoNewline -ForegroundColor White
+                Write-Host "Folders present but empty" -ForegroundColor Green
             }
         } else {
-            Write-Host "  Recycle Bin: No activity found" -ForegroundColor Green
+            
+            Write-Host "  Status: " -NoNewline -ForegroundColor White
+            Write-Host "Emptyy" -ForegroundColor Green
+            Write-Host "  Last Modified: " -NoNewline -ForegroundColor White
+            Write-Host $recycleBinFolder.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Green
         }
+        
+        
+        $clearEvent = Get-WinEvent -FilterHashtable @{LogName="System"; Id=10006} -MaxEvents 1 -ErrorAction SilentlyContinue
+        if ($clearEvent) {
+            Write-Host "  Last Cleared (Event): " -NoNewline -ForegroundColor White
+            Write-Host $clearEvent.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Red
+        }
+    } else {
+        Write-Host "  Recycle Bin not found at: $recycleBinPath" -ForegroundColor Yellow
+        Write-Host "  Note: Recycle Bin may be empty or on different drive" -ForegroundColor Gray
     }
 } catch {
-    Write-Host "  Recycle Bin: Unable to access information" -ForegroundColor Red
+    Write-Host "  Recycle Bin: Unable to access (could be a weird path or sum)" -ForegroundColor Red
+    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor DarkRed
 }
 
-Write-Host "`nSystem check complete." -ForegroundColor Cyan
+Write-Host "`nCheck Complete, hit up @praiselily if u run into any issues." -ForegroundColor Cyan
