@@ -1,0 +1,409 @@
+Write-Host @"
+⠀⠀⠀⠀⣶⣄⠀⠀⠀⠀⠀⠀⢀⣶⡆⠀⠀⠀
+⠀⠀⠀⢸⣿⣿⡆⠀⠀⠀⠀⢀⣾⣿⡇⠀⠀⠀
+⠀⠀⠀⠘⣿⣿⣿⠀⠀⠀⠀⢸⣿⣿⡇⠀⠀⠀
+⠀⠀⠀⠀⢿⣿⣿⣤⣤⣤⣤⣼⣿⡿⠃⠀⠀⠀
+⠀⠀⠀⢠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠀⠀⠀
+⠀⠀⢠⣿⡃⣦⢹⣿⣟⣙⣿⣿⠰⡀⣿⣇⠀⠀
+⠠⠬⣿⣿⣷⣶⣿⣿⣿⣿⣿⣿⣷⣾⣿⣿⡭⠤      
+⠀⣼⣿⣿⣿⣿⠿⠛⠛⠛⠛⠻⢿⣿⣿⣿⣿⡀
+⢰⣿⣿⣿⠋⠀⠀⠀⢀⣀⠀⠀⠀⠉⢿⣿⣿⣧
+⢸⣿⣿⠃⠜⠛⠂⠀⠋⠉⠃⠐⠛⠻⠄⢿⣿⣿
+⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿
+⠘⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⡏
+⠀⠈⠻⠿⣤⣀⡀⠀⠀⠀⠀⠀⣀⣠⠾⠟⠋⠀            made with love by lily<3
+"@ -ForegroundColor Cyan
+function Get-VolumeMappings {
+    $mappings = @{}
+    
+    Write-Host "Finding VOlumes" -ForegroundColor Cyan
+    
+    try {
+        $volumes = Get-CimInstance -ClassName Win32_Volume -ErrorAction Stop | Where-Object { $_.DriveLetter }
+        
+        foreach ($volume in $volumes) {
+            $deviceId = $volume.DeviceID
+            $driveLetter = $volume.DriveLetter
+            $label = $volume.Label
+            
+            if ($deviceId -match '\\\\.\\HarddiskVolume(\d+)') {
+                $volumeNumber = $matches[1]
+                $mappings["HarddiskVolume$volumeNumber"] = @{
+                    DriveLetter = $driveLetter.TrimEnd(':')
+                    Label = $label
+                    DeviceID = $deviceId
+                    Method = "CIM"
+                }
+                Write-Host "    Found: HarddiskVolume$volumeNumber -> $driveLetter" -ForegroundColor Green
+            }
+        }
+    }
+    catch {
+        Write-Host "    failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    
+    if ($mappings.Count -eq 0) {
+        try {
+            $volumes = Get-WmiObject -Class Win32_Volume -ErrorAction Stop | Where-Object { $_.DriveLetter }
+            
+            foreach ($volume in $volumes) {
+                $deviceId = $volume.DeviceID
+                $driveLetter = $volume.DriveLetter
+                $label = $volume.Label
+                
+                if ($deviceId -match '\\\\.\\HarddiskVolume(\d+)') {
+                    $volumeNumber = $matches[1]
+                    $mappings["HarddiskVolume$volumeNumber"] = @{
+                        DriveLetter = $driveLetter.TrimEnd(':')
+                        Label = $label
+                        DeviceID = $deviceId
+                        Method = "WMI"
+                    }
+                    Write-Host "    Found: HarddiskVolume$volumeNumber -> $driveLetter" -ForegroundColor Green
+                }
+            }
+        }
+        catch {
+            Write-Host "    failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+    
+    if ($mappings.Count -eq 0) {
+        try {
+            $drives = [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.DriveType -eq 'Fixed' -or $_.DriveType -eq 'Removable' }
+            
+            foreach ($drive in $drives) {
+                if ($drive.Name -match '^([A-Z]):') {
+                    $driveLetter = $matches[1]
+                    
+                    if ($driveLetter -eq 'C') {
+                        $mappings["HarddiskVolume2"] = @{
+                            DriveLetter = $driveLetter
+                            Label = $drive.VolumeLabel
+                            DeviceID = "Estimated"
+                            Method = "Estimation"
+                        }
+                        $mappings["HarddiskVolume3"] = @{
+                            DriveLetter = $driveLetter
+                            Label = $drive.VolumeLabel
+                            DeviceID = "Estimated"
+                            Method = "Estimation"
+                        }
+                        Write-Host "    Estimated: HarddiskVolume2/3 -> C:" -ForegroundColor Yellow
+                    }
+                }
+            }
+        }
+        catch {
+        }
+    }
+    
+    if ($mappings.Count -eq 0) {
+        try {
+            $mountvolOutput = & mountvol 2>$null
+            
+            foreach ($line in $mountvolOutput) {
+                if ($line -match '^([A-Z]:)\\?\\?\\s+(\\\\\?\\Volume\{[^}]+\})') {
+                    $driveLetter = $matches[1]
+                    $volumeGuid = $matches[2]
+                    
+                    if ($driveLetter -eq 'C:') {
+                        $mappings["HarddiskVolume2"] = @{
+                            DriveLetter = 'C'
+                            Label = "From mountvol"
+                            DeviceID = $volumeGuid
+                            Method = "mountvol"
+                        }
+                        $mappings["HarddiskVolume3"] = @{
+                            DriveLetter = 'C'
+                            Label = "From mountvol"
+                            DeviceID = $volumeGuid
+                            Method = "mountvol"
+                        }
+                        Write-Host "   HarddiskVolume2/3 -> C (i hope):" -ForegroundColor Yellow
+                    }
+                }
+            }
+        }
+        catch {
+        }
+    }
+    if ($mappings.Count -eq 0) {
+        try {
+            $volumePaths = Get-ChildItem "HKLM:\SYSTEM\MountedDevices" -ErrorAction Stop
+            
+            foreach ($volumePath in $volumePaths) {
+                $value = Get-ItemProperty -Path $volumePath.PSPath -Name "\??\Volume{" -ErrorAction SilentlyContinue
+                if (-not $value) { continue }
+                
+                $data = $value."\??\Volume{"
+                if ($data -and $data.Length -gt 0) {
+                    Write-Host "no volumes in reg" -ForegroundColor Gray
+                }
+            }
+        }
+        catch {
+        }
+    }
+    
+    if ($mappings.Count -eq 0) {
+        Write-Host "my professional guesses :D" -ForegroundColor Yellow
+        $mappings = @{
+            "HarddiskVolume1" = @{DriveLetter = "C"; Label = "System Reserved (estimated)"; Method = "Fallback"}
+            "HarddiskVolume2" = @{DriveLetter = "C"; Label = "Windows (estimated)"; Method = "Fallback"}
+            "HarddiskVolume3" = @{DriveLetter = "C"; Label = "Primary (estimated)"; Method = "Fallback"}
+            "HarddiskVolume4" = @{DriveLetter = "D"; Label = "Secondary (estimated)"; Method = "Fallback"}
+        }
+        Write-Host "Using my guesses" -ForegroundColor Yellow
+    }
+    
+    return $mappings
+}
+
+function Find-HarddiskFiles {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FolderPath
+    )
+    
+    $harddiskFiles = @()
+    
+    $patterns = @("*harddisk*.txt", "*harddisk*")
+    
+    foreach ($pattern in $patterns) {
+        $foundFiles = Get-ChildItem -Path $FolderPath -Filter $pattern -File | 
+                     Where-Object { $_.Name -match "harddisk" }
+        $harddiskFiles += $foundFiles
+    }
+    
+    return $harddiskFiles | Sort-Object Name | Get-Unique
+}
+
+function Convert-HarddiskPaths {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InputFile,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$OutputFile,
+        
+        [Parameter(Mandatory=$false)]
+        [hashtable]$VolumeMappings
+    )
+    
+    if (-not (Test-Path $InputFile)) {
+        Write-Error "Input file '$InputFile' not found"
+        return
+    }
+    
+    if (-not $OutputFile) {
+        $inputDir = [System.IO.Path]::GetDirectoryName($InputFile)
+        $OutputFile = Join-Path $inputDir "paths.txt"
+    }
+    
+    $content = Get-Content -Path $InputFile -Raw
+    
+    $patterns = @(
+        '\\Device\\HarddiskVolume(\d+)\\(.+)',  
+        'HarddiskVolume(\d+)\\(.+)',            
+        'e\\HarddiskVolume(\d+)\\(.+)',         
+        '\\HarddiskVolume(\d+)\\(.+)'           
+    )
+    
+    $convertedPaths = @()
+    $unmappedVolumes = @{}
+    
+
+    $lines = $content -split "`n"
+    foreach ($line in $lines) {
+        $trimmedLine = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmedLine)) { continue }
+        
+        if ($trimmedLine -match '^(System Informer|Windows NT|\d+:\d+:\d+ PM|\d+:\d+:\d+ AM|0x[0-9a-f]+)') {
+            continue
+        }
+        
+        foreach ($pattern in $patterns) {
+            if ($trimmedLine -match $pattern) {
+                $volumeNumber = $matches[1]
+                $pathPart = $matches[2].Trim()
+                $pathPart = $pathPart -replace '\s*\[.*?\]', ''
+                $volumeKey = "HarddiskVolume$volumeNumber"
+                if ($VolumeMappings.ContainsKey($volumeKey)) {
+                    $driveLetter = $VolumeMappings[$volumeKey].DriveLetter
+                    $fullPath = "${driveLetter}:\$pathPart"
+                    
+
+                    $fullPath = $fullPath -replace '\\+', '\'  
+                    
+                    if ($fullPath -match '\.(exe|dll|sys|com|scr|bat|cmd|ps1)$') {
+                        $convertedPaths += $fullPath
+                    }
+                } else {
+
+                    if (-not $unmappedVolumes.ContainsKey($volumeKey)) {
+                        $unmappedVolumes[$volumeKey] = @()
+                    }
+                    $unmappedVolumes[$volumeKey] += $pathPart
+                }
+                break
+            }
+        }
+    }
+    
+    if ($unmappedVolumes.Count -gt 0) {
+        Write-Host "`nunmapped folders found:" -ForegroundColor Yellow
+        foreach ($volumeKey in $unmappedVolumes.Keys | Sort-Object) {
+            Write-Host "  $volumeKey (used in $($unmappedVolumes[$volumeKey].Count) paths)" -ForegroundColor Yellow
+        }
+        Write-Host "Consider manually mapping these disks" -ForegroundColor Yellow
+    }
+    
+    $uniquePaths = @()
+    $seen = @{}
+    foreach ($path in $convertedPaths) {
+        if (-not $seen.ContainsKey($path)) {
+            $seen[$path] = $true
+            $uniquePaths += $path
+        }
+    }
+    
+    
+    if ($uniquePaths.Count -gt 0) {
+        $uniquePaths | Out-File -FilePath $OutputFile -Encoding UTF8
+        Write-Host "Converted $($uniquePaths.Count) paths and saved to: $OutputFile" -ForegroundColor Green
+    } else {
+        Write-Warning "No valid paths were found"
+    }
+    
+    return $uniquePaths
+}
+
+function Show-VolumeMappings {
+    param([hashtable]$Mappings)
+    
+    Write-Host "`nVolumes:" -ForegroundColor Cyan
+    
+    foreach ($key in $Mappings.Keys | Sort-Object) {
+        $mapping = $Mappings[$key]
+        Write-Host "  $key -> $($mapping.DriveLetter):\" -ForegroundColor White -NoNewline
+        Write-Host " ($($mapping.Method))" -ForegroundColor Gray
+        if ($mapping.Label) {
+            Write-Host "      Label: $($mapping.Label)" -ForegroundColor Gray
+        }
+    }
+    Write-Host ""
+}
+
+function Add-ManualMappings {
+    param(
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Mappings
+    )
+    
+    Write-Host "`nManual add volumes" -ForegroundColor Cyan
+    
+    do {
+        Write-Host "`nEnter volumes (for example, '3 C' for HarddiskVolume3 -> C:)" -ForegroundColor White
+        Write-Host "or press enter" -ForegroundColor Gray
+        
+        $input = Read-Host "mappin"
+        
+        if (-not [string]::IsNullOrWhiteSpace($input)) {
+            if ($input -match '^(\d+)\s+([A-Za-z])$') {
+                $volumeNumber = $matches[1]
+                $driveLetter = $matches[2].ToUpper()
+                
+                $volumeKey = "HarddiskVolume$volumeNumber"
+                $Mappings[$volumeKey] = @{
+                    DriveLetter = $driveLetter
+                    Label = "Manually mapped"
+                    Method = "Manual"
+                }
+                
+                Write-Host " Added $volumeKey -> ${driveLetter}:" -ForegroundColor Green
+            } else {
+                Write-Host "bad format Use: 'number driveletter' (like '3 C')" -ForegroundColor Red
+            }
+        }
+    } until ([string]::IsNullOrWhiteSpace($input))
+    
+    return $Mappings
+}
+
+
+
+do {
+    $folderPath = Read-Host "`nEnter the path to your ss folder (make sure your dump is named harddisk.txt)"
+    if (-not (Test-Path $folderPath)) {
+        Write-Host "fix your folder path whore" -ForegroundColor Red
+        continue
+    }
+    
+    $harddiskFiles = Find-HarddiskFiles -FolderPath $folderPath
+    
+    if ($harddiskFiles.Count -eq 0) {
+        Write-Host "No harddisk.txt found in '$folderPath'" -ForegroundColor Red
+        Write-Host "Looking for files with 'harddisk' in the name" -ForegroundColor Yellow
+        $tryAgain = Read-Host "Try again? (Y/N)"
+        if ($tryAgain -ne 'Y' -and $tryAgain -ne 'y') {
+            exit
+        }
+    }
+} until ($harddiskFiles.Count -gt 0)
+
+if ($harddiskFiles.Count -gt 1) {
+    Write-Host "`nMultiple files w keyword "harddisk" found:" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $harddiskFiles.Count; $i++) {
+        Write-Host "  [$($i + 1)] $($harddiskFiles[$i].Name)" -ForegroundColor White
+    }
+    
+    do {
+        $choice = Read-Host "`nSelect a file (1-$($harddiskFiles.Count))"
+    } until ($choice -match "^\d+$" -and [int]$choice -ge 1 -and [int]$choice -le $harddiskFiles.Count)
+    
+    $selectedFile = $harddiskFiles[[int]$choice - 1].FullName
+} else {
+    $selectedFile = $harddiskFiles[0].FullName
+}
+
+Write-Host "Selected file: $selectedFile" -ForegroundColor Green
+$volumeMappings = Get-VolumeMappings
+
+$addManual = Read-Host "Do you want to add in disk letterms manually? (Y/N)"
+if ($addManual -eq 'Y' -or $addManual -eq 'y') {
+    $volumeMappings = Add-ManualMappings -Mappings $volumeMappings
+}
+
+if ($volumeMappings.Count -gt 0) {
+    Show-VolumeMappings -Mappings $volumeMappings
+} else {
+    Write-Host "letters mapped incorrectly" -ForegroundColor Red
+    exit 1
+}
+
+$outputDir = [System.IO.Path]::GetDirectoryName($selectedFile)
+$outputFile = Join-Path $outputDir "paths.txt"
+
+Write-Host "Output will be saved to: $outputFile" -ForegroundColor Cyan
+
+Write-Host "`nConverting paths" -ForegroundColor Cyan
+$convertedPaths = Convert-HarddiskPaths -InputFile $selectedFile -OutputFile $outputFile -VolumeMappings $volumeMappings
+
+if ($convertedPaths.Count -gt 0) {
+    Write-Host "`nConversion Summary:" -ForegroundColor Green
+    Write-Host "Input file: $(Split-Path $selectedFile -Leaf)" -ForegroundColor Gray
+    Write-Host "Total paths converted: $($convertedPaths.Count)" -ForegroundColor White
+    
+    Write-Host "`nFirst 10 converted paths:" -ForegroundColor Cyan
+    for ($i = 0; $i -lt [Math]::Min(10, $convertedPaths.Count); $i++) {
+        Write-Host "  $($convertedPaths[$i])" -ForegroundColor Gray
+    }
+    
+    if ($convertedPaths.Count -gt 10) {
+        Write-Host "  and $($convertedPaths.Count - 10) more" -ForegroundColor DarkGray
+    }
+}
+
+Write-Host "`ndone, press any key to exit, dm me if anything breaks @praiselily" -ForegroundColor Cyan
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
