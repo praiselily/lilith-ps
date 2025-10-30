@@ -169,30 +169,145 @@ Check-EventLog "Security" 4616 "System time changed"
 Check-EventLog "System" 6005 "Event Log Service started"
 Check-DeviceDeleted
 
+
 $prefetchPath = "$env:SystemRoot\Prefetch"
 if (Test-Path $prefetchPath) {
-    $prefetchFiles = Get-ChildItem $prefetchPath -File -ErrorAction SilentlyContinue
-    $hiddenFiles = $prefetchFiles | Where-Object { $_.Attributes -band [System.IO.FileAttributes]::Hidden }
-    $readOnlyFiles = $prefetchFiles | Where-Object { $_.Attributes -band [System.IO.FileAttributes]::ReadOnly }
-
-    Write-Host "`nPREFETCH" -ForegroundColor Cyan
-
-    if ($hiddenFiles) {
-        Write-Host "  Hidden Files: $($hiddenFiles.Count) found" -ForegroundColor Yellow
-        foreach ($file in $hiddenFiles) {
-            Write-Host ("    {0}" -f $file.Name) -ForegroundColor DarkYellow
-        }
+    Write-Host "`nPREFETCH INTEGRITY" -ForegroundColor Cyan
+    
+    
+    $files = Get-ChildItem -Path $prefetchPath -Filter *.pf -Force -ErrorAction SilentlyContinue
+    if (-not $files) {
+        Write-Host "  No prefetch found?? Check the folder please" -ForegroundColor Yellow
     } else {
-        Write-Host "  Hidden Files: None" -ForegroundColor Green
-    }
+        $hashTable = @{}
+        $suspiciousFiles = @{}
+        $totalFiles = $files.Count
 
-    if ($readOnlyFiles) {
-        Write-Host "  Read-Only Files: $($readOnlyFiles.Count) found" -ForegroundColor Yellow
-        foreach ($file in $readOnlyFiles) {
-            Write-Host ("    {0}" -f $file.Name) -ForegroundColor DarkYellow
+        
+        $hiddenFiles = @()
+        $readOnlyFiles = @()
+        $hiddenAndReadOnlyFiles = @()
+        $invalidSignatureFiles = @()
+        $errorFiles = @()
+
+        foreach ($file in $files) {
+            try {
+                $isHidden = $file.Attributes -band [System.IO.FileAttributes]::Hidden
+                $isReadOnly = $file.Attributes -band [System.IO.FileAttributes]::ReadOnly
+                
+                
+                if ($isHidden -and $isReadOnly) {
+                    $hiddenAndReadOnlyFiles += $file
+                    if (-not $suspiciousFiles.ContainsKey($file.Name)) {
+                        $suspiciousFiles[$file.Name] = "Hidden and Read-only"
+                    }
+                } elseif ($isHidden) {
+                    $hiddenFiles += $file
+                    if (-not $suspiciousFiles.ContainsKey($file.Name)) {
+                        $suspiciousFiles[$file.Name] = "Hidden file"
+                    }
+                } elseif ($isReadOnly) {
+                    $readOnlyFiles += $file
+                    if (-not $suspiciousFiles.ContainsKey($file.Name)) {
+                        $suspiciousFiles[$file.Name] = "Read-only file"
+                    }
+                }
+
+                
+                $stream = [System.IO.File]::OpenRead($file.FullName)
+                $reader = New-Object System.IO.BinaryReader($stream)
+                $signature = [System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(3))
+                $reader.Close()
+                $stream.Close()
+
+                if ($signature -ne "MAM") {
+                    $invalidSignatureFiles += $file
+                    if (-not $suspiciousFiles.ContainsKey($file.Name)) {
+                        $suspiciousFiles[$file.Name] = "Invalid signature: $signature"
+                    } else {
+                        
+                        $suspiciousFiles[$file.Name] += ", Invalid signature: $signature"
+                    }
+                }
+
+                
+                $hash = Get-FileHash -Path $file.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue
+                if ($hash) {
+                    if ($hashTable.ContainsKey($hash.Hash)) {
+                        $hashTable[$hash.Hash].Add($file.Name)
+                    } else {
+                        $hashTable[$hash.Hash] = [System.Collections.Generic.List[string]]::new()
+                        $hashTable[$hash.Hash].Add($file.Name)
+                    }
+                }
+            } catch {
+                $errorFiles += $file
+                if (-not $suspiciousFiles.ContainsKey($file.Name)) {
+                    $suspiciousFiles[$file.Name] = "Error analyzing file: $($_.Exception.Message)"
+                }
+            }
         }
-    } else {
-        Write-Host "  Read-Only Files: None" -ForegroundColor Green
+
+        
+        if ($hiddenAndReadOnlyFiles.Count -gt 0) {
+            Write-Host "  Hidden & Read-only Files: $($hiddenAndReadOnlyFiles.Count) found" -ForegroundColor Red
+            foreach ($file in $hiddenAndReadOnlyFiles) {
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor Red
+            }
+        }
+
+        if ($hiddenFiles.Count -gt 0) {
+            Write-Host "  Hidden Files: $($hiddenFiles.Count) found" -ForegroundColor Yellow
+            foreach ($file in $hiddenFiles) {
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor DarkYellow
+            }
+        } else {
+            Write-Host "  Hidden Files: None" -ForegroundColor Green
+        }
+
+        if ($readOnlyFiles.Count -gt 0) {
+            Write-Host "  Read-Only Files: $($readOnlyFiles.Count)" -ForegroundColor Yellow
+            foreach ($file in $readOnlyFiles) {
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor DarkYellow
+            }
+        } else {
+            Write-Host "  Read-Only Files: None" -ForegroundColor Green
+        }
+
+        if ($invalidSignatureFiles.Count -gt 0) {
+            Write-Host "  Invalid Signatures: $($invalidSignatureFiles.Count)" -ForegroundColor Red
+            foreach ($file in $invalidSignatureFiles) {
+                Write-Host ("    {0}" -f $file.Name) -ForegroundColor Red
+            }
+        } else {
+            Write-Host "  File Signatures: All good" -ForegroundColor Green
+        }
+
+        
+        $repeatedHashes = $hashTable.GetEnumerator() | Where-Object { $_.Value.Count -gt 1 }
+        if ($repeatedHashes) {
+            Write-Host "  Duplicate Files: $($repeatedHashes.Count) sets found" -ForegroundColor Yellow
+            foreach ($entry in $repeatedHashes) {
+                foreach ($file in $entry.Value) {
+                    if (-not $suspiciousFiles.ContainsKey($file)) {
+                        $suspiciousFiles[$file] = "Duplicate file"
+                    }
+                }
+                Write-Host ("    Duplicate set: {0}" -f ($entry.Value -join ", ")) -ForegroundColor DarkYellow
+            }
+        } else {
+            Write-Host "  Duplicatess: None" -ForegroundColor Green
+        }
+
+        
+        if ($suspiciousFiles.Count -gt 0) {
+            Write-Host "`n  SUSPICIOUS FILES FOUND: $($suspiciousFiles.Count)/$totalFiles" -ForegroundColor Red
+            foreach ($entry in $suspiciousFiles.GetEnumerator() | Sort-Object Key) {
+                Write-Host ("    {0} : {1}" -f $entry.Key, $entry.Value) -ForegroundColor Red
+            }
+        } else {
+            Write-Host "`n  Prefetch integrity: Clean ($totalFiles files checked)" -ForegroundColor Green
+        }
     }
 } else {
     Write-Host "`nPrefetch folder not found" -ForegroundColor Red
