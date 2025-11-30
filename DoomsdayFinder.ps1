@@ -1,11 +1,10 @@
 $paths = @(
     "C:\Program Files\Java",
     "C:\Program Files (x86)\Java",
-    "$env:USERPROFILE\.lunarclient",
-    "$env:USERPROFILE\.minecraft", 
-    "$env:USERPROFILE\.minecraft\modrinth",
-    "$env:USERPROFILE\modrinth\",
-    "C:\Users\lilia\AppData\Roaming\Badlion Client\Data",
+    "$env:USERPROFILE\AppData\.lunarclient",
+    "$env:USERPROFILE\AppData\.minecraft", 
+    "$env:USERPROFILE\AppData\modrinth\",
+    "$env:USERPROFILE\AppData\Roaming\Badlion Client\Data",
     "C:\Windows\System32"   
 )
 $strings = @(
@@ -65,6 +64,7 @@ Write-Host "Usually takes less than a minute" -ForegroundColor Gray
 Write-Host ""
 $results = @()
 $currentPath = 0
+$processedFiles = @{}  
 
 foreach ($path in $paths) {
     $currentPath++
@@ -83,6 +83,9 @@ foreach ($path in $paths) {
     }
 
     foreach ($f in $files) {
+        
+        if ($processedFiles.ContainsKey($f.FullName)) { continue }
+        
         $isJar = $false
         $matchedString = $null
         
@@ -105,6 +108,8 @@ foreach ($path in $paths) {
                 FileSize        = "$([math]::Round($f.Length/1KB, 2)) KB"
                 ScanType        = "System Scan"
             }
+
+            $processedFiles[$f.FullName] = $true
         }
     }
 }
@@ -131,6 +136,8 @@ if ($total -gt 0) {
         
         Write-Progress -Activity "Phase 2: Scanning JAR files" -Status "Processing $i of $total files" -PercentComplete $percentComplete
 
+        if ($processedFiles.ContainsKey($file.FullName)) { return }
+        
         $content = Get-Content $file.FullName -Raw -ErrorAction SilentlyContinue
         if ($content) {
             foreach($string in $strings){
@@ -144,6 +151,9 @@ if ($total -gt 0) {
                         FileSize = "$([math]::Round($file.Length/1KB, 2)) KB"
                         ScanType = "JAR Scan"
                     }
+
+                    $processedFiles[$file.FullName] = $true
+                    break
                 }
             }
         }
