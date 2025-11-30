@@ -174,7 +174,6 @@ $prefetchPath = "$env:SystemRoot\Prefetch"
 if (Test-Path $prefetchPath) {
     Write-Host "`nPREFETCH INTEGRITY" -ForegroundColor Cyan
     
-    
     $files = Get-ChildItem -Path $prefetchPath -Filter *.pf -Force -ErrorAction SilentlyContinue
     if (-not $files) {
         Write-Host "  No prefetch found?? Check the folder please" -ForegroundColor Yellow
@@ -183,18 +182,15 @@ if (Test-Path $prefetchPath) {
         $suspiciousFiles = @{}
         $totalFiles = $files.Count
 
-        
         $hiddenFiles = @()
         $readOnlyFiles = @()
         $hiddenAndReadOnlyFiles = @()
-        $invalidSignatureFiles = @()
         $errorFiles = @()
 
         foreach ($file in $files) {
             try {
                 $isHidden = $file.Attributes -band [System.IO.FileAttributes]::Hidden
                 $isReadOnly = $file.Attributes -band [System.IO.FileAttributes]::ReadOnly
-                
                 
                 if ($isHidden -and $isReadOnly) {
                     $hiddenAndReadOnlyFiles += $file
@@ -213,24 +209,6 @@ if (Test-Path $prefetchPath) {
                     }
                 }
 
-                
-                $stream = [System.IO.File]::OpenRead($file.FullName)
-                $reader = New-Object System.IO.BinaryReader($stream)
-                $signature = [System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(3))
-                $reader.Close()
-                $stream.Close()
-
-                if ($signature -ne "MAM") {
-                    $invalidSignatureFiles += $file
-                    if (-not $suspiciousFiles.ContainsKey($file.Name)) {
-                        $suspiciousFiles[$file.Name] = "Invalid signature: $signature"
-                    } else {
-                        
-                        $suspiciousFiles[$file.Name] += ", Invalid signature: $signature"
-                    }
-                }
-
-                
                 $hash = Get-FileHash -Path $file.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue
                 if ($hash) {
                     if ($hashTable.ContainsKey($hash.Hash)) {
@@ -248,7 +226,6 @@ if (Test-Path $prefetchPath) {
             }
         }
 
-        
         if ($hiddenAndReadOnlyFiles.Count -gt 0) {
             Write-Host "  Hidden & Read-only Files: $($hiddenAndReadOnlyFiles.Count) found" -ForegroundColor Yellow
             foreach ($file in $hiddenAndReadOnlyFiles) {
@@ -274,16 +251,6 @@ if (Test-Path $prefetchPath) {
             Write-Host "  Read-Only Files: None" -ForegroundColor Green
         }
 
-        if ($invalidSignatureFiles.Count -gt 0) {
-            Write-Host "  Invalid Signatures: $($invalidSignatureFiles.Count)" -ForegroundColor Yellow
-            foreach ($file in $invalidSignatureFiles) {
-                Write-Host ("    {0}" -f $file.Name) -ForegroundColor White
-            }
-        } else {
-            Write-Host "  File Signatures: All good" -ForegroundColor Green
-        }
-
-        
         $repeatedHashes = $hashTable.GetEnumerator() | Where-Object { $_.Value.Count -gt 1 }
         if ($repeatedHashes) {
             Write-Host "  Duplicate Files: $($repeatedHashes.Count) sets found" -ForegroundColor Yellow
@@ -296,10 +263,9 @@ if (Test-Path $prefetchPath) {
                 Write-Host ("    Duplicate set: {0}" -f ($entry.Value -join ", ")) -ForegroundColor White
             }
         } else {
-            Write-Host "  Duplicatess: None" -ForegroundColor Green
+            Write-Host "  Duplicates: None" -ForegroundColor Green
         }
 
-        
         if ($suspiciousFiles.Count -gt 0) {
             Write-Host "`n  SUSPICIOUS FILES FOUND: $($suspiciousFiles.Count)/$totalFiles" -ForegroundColor Yellow
             foreach ($entry in $suspiciousFiles.GetEnumerator() | Sort-Object Key) {
@@ -314,29 +280,22 @@ if (Test-Path $prefetchPath) {
 }
 
 try {
-    
     $recycleBinPath = "$env:SystemDrive" + '\$Recycle.Bin'
     
-    Write-Host "`nRECYCLE BIN" -ForegroundColor Cyan
+    Write-Host "`nRecycle Bin" -ForegroundColor Cyan
 
     if (Test-Path $recycleBinPath) {
-        
         $recycleBinFolder = Get-Item -LiteralPath $recycleBinPath -Force
-        
-       
         $userFolders = Get-ChildItem -LiteralPath $recycleBinPath -Directory -Force -ErrorAction SilentlyContinue
         
         if ($userFolders) {
-           
             $allDeletedItems = @()
             $latestModTime = $recycleBinFolder.LastWriteTime
             
             foreach ($userFolder in $userFolders) {
-                
                 if ($userFolder.LastWriteTime -gt $latestModTime) {
                     $latestModTime = $userFolder.LastWriteTime
                 }
-                
                 
                 $userItems = Get-ChildItem -LiteralPath $userFolder.FullName -File -Force -ErrorAction SilentlyContinue
                 if ($userItems) {
@@ -356,7 +315,6 @@ try {
                 Write-Host "  Total Items: " -NoNewline -ForegroundColor White
                 Write-Host $allDeletedItems.Count -ForegroundColor Yellow
                 
-                
                 $latestItem = $allDeletedItems | Sort-Object LastWriteTime -Descending | Select-Object -First 1
                 Write-Host "  Latest Item: " -NoNewline -ForegroundColor White
                 Write-Host $latestItem.Name -ForegroundColor Gray
@@ -365,13 +323,11 @@ try {
                 Write-Host "Folders present but empty" -ForegroundColor Green
             }
         } else {
-            
             Write-Host "  Status: " -NoNewline -ForegroundColor White
             Write-Host "Emptyy" -ForegroundColor Green
             Write-Host "  Last Modified: " -NoNewline -ForegroundColor White
             Write-Host $recycleBinFolder.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Green
         }
-        
         
         $clearEvent = Get-WinEvent -FilterHashtable @{LogName="System"; Id=10006} -MaxEvents 1 -ErrorAction SilentlyContinue
         if ($clearEvent) {
@@ -382,9 +338,37 @@ try {
         Write-Host "  Recycle Bin not found at: $recycleBinPath" -ForegroundColor Yellow
         Write-Host "  Note: Recycle Bin may be empty or on different drive" -ForegroundColor Gray
     }
+
+
+    $consoleHistoryPath = "$env:USERPROFILE\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadline\ConsoleHost_history.txt"
+    Write-Host "`n  Console Host History:" -ForegroundColor Cyan
+    
+    if (Test-Path $consoleHistoryPath) {
+        $historyFile = Get-Item -Path $consoleHistoryPath -Force
+        Write-Host "    Last Modified: " -NoNewline -ForegroundColor White
+        Write-Host $historyFile.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor Yellow
+        
+
+        $attributes = $historyFile.Attributes
+        if ($attributes -ne "Archive") {
+            Write-Host "    Attributes: " -NoNewline -ForegroundColor White
+            Write-Host $attributes -ForegroundColor Yellow
+        } else {
+            Write-Host "    Attributes: Normal" -ForegroundColor Green
+        }
+        
+
+        $fileSize = $historyFile.Length
+        Write-Host "    File Size: " -NoNewline -ForegroundColor White
+        Write-Host "$([math]::Round($fileSize/1024, 2)) KB" -ForegroundColor Yellow
+        
+    } else {
+        Write-Host "    File not found: $consoleHistoryPath" -ForegroundColor Yellow
+        Write-Host "    Note: PowerShell history may be disabled or never used" -ForegroundColor Gray
+    }
+
 } catch {
-    Write-Host "  Recycle Bin: Unable to access (could be a weird path or sum)" -ForegroundColor Red
-    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor DarkRed
+    Write-Host "  Error accessing system information: $($_.Exception.Message)" -ForegroundColor Red
 }
 
 Write-Host "`nCheck Complete, hit up @praiselily if u run into any issues." -ForegroundColor Cyan
