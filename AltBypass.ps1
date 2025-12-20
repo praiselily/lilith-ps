@@ -79,6 +79,7 @@ Write-Host ""
 Write-Host "Finished" -ForegroundColor Cyan
 Write-Host "folders and locations deleted: $deletedCount" -ForegroundColor Green
 Write-Host ""
+
 $response = Read-Host "Would you like to clear the USN Journal? (yes/no)"
 
 if ($response -eq "yes" -or $response -eq "y") {
@@ -86,9 +87,7 @@ if ($response -eq "yes" -or $response -eq "y") {
     Write-Host "Clearing USN Journal..." -ForegroundColor Yellow
     try {
         Start-Process -FilePath "fsutil" -ArgumentList "usn", "deletejournal", "/d", "C:" -Verb RunAs -Wait
-        Write-Host "USN Journal cleared -ForegroundColor Green
-        Write-Host ""
-        Write-Host "remember to reset your pc before playing" -ForegroundColor Red -BackgroundColor White
+        Write-Host "USN Journal cleared" -ForegroundColor Green
     }
     catch {
         Write-Host "Failed to clear USN Journal. Run this script with admin priv." -ForegroundColor Red
@@ -98,6 +97,38 @@ else {
     Write-Host "USN Journal was not cleared." -ForegroundColor Yellow
 }
 
+Write-Host ""
+
+$eventResponse = Read-Host "Would you like to clear Windows Event Logs? (yes/no)"
+
+if ($eventResponse -eq "yes" -or $eventResponse -eq "y") {
+    Write-Host ""
+    Write-Host "Clearing Event Logs..." -ForegroundColor Yellow
+    try {
+        $logs = Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | Where-Object { $_.RecordCount -gt 0 }
+        $clearedCount = 0
+        
+        foreach ($log in $logs) {
+            try {
+                wevtutil cl $log.LogName
+                $clearedCount++
+            }
+            catch {
+            }
+        }
+        
+        Write-Host "Event Logs cleared ($clearedCount logs)" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "Failed to clear Event Logs. Run this script with admin priv." -ForegroundColor Red
+    }
+}
+else {
+    Write-Host "Event Logs were not cleared." -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "remember to reset your pc before playing" -ForegroundColor Red -BackgroundColor White
 Write-Host ""
 Write-Host "hit up @praiselily if you run into any issues" -ForegroundColor Green
 Write-Host "Press any key to exit"
