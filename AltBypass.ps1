@@ -44,7 +44,6 @@ $pathsToClean = @(
     "C:\Users\$username\AppData\Roaming\.minecraft\launcher_log.txt",
     "C:\Users\$username\AppData\Roaming\.minecraft\launcher_msa_credentials.bin",
     "C:\Users\$username\AppData\Roaming\.tlauncher\accounts.json",
-    "C:\Users\$username\AppData\Roaming\.tlauncher\legacy\minecraft\saves",
     "C:\Users\$username\AppData\Roaming\.technic\",
     "C:\Users\$username\AppData\Roaming\PrismLauncher\accounts.json",
     "C:\Users\$username\AppData\Roaming\PrismLauncher\metacache",
