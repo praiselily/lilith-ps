@@ -23,10 +23,13 @@ Write-Host ""
 
 $username = $env:USERNAME
 $pathsToClean = @(
+    "C:\Users\$username\.lunarclient\game-cache",
+    "C:\Users\$username\.lunarclient\logs",
+    "C:\Users\$username\.lunarclient\launcher-cache",
     "C:\Users\$username\.lunarclient\profiles",
     "C:\Users\$username\.lunarclient\settings",
     "C:\Users\$username\.lunarclient\offline",
-    "C:\Users\$username\AppData\Roaming\.lunarclient",
+    "C:\Users\$username\AppData\Roaming\lunarclient",
     "C:\Users\$username\AppData\Roaming\Badlion Client\logs\launcher",
     "C:\Users\$username\AppData\Roaming\Badlion Client\accounts.dat",
     "C:\Users\$username\AppData\Roaming\Badlion Client\cache",
