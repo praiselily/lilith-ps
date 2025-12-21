@@ -16,7 +16,7 @@ Write-Host "`
 Write-Host ""
 Write-Host ""
 
-Write-Host "minecraft ss alt bypass" -ForegroundColor Cyan
+Write-Host "Alt bypass for minecraft screenshares ( dont alt guys! )" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "this script will only delete alts from common clients, and is created for 1.8 versions of minecraft. Though it will work on later versions as well" -ForegroundColor Yellow
 Write-Host ""
@@ -53,8 +53,7 @@ $pathsToClean = @(
     "C:\Users\$username\AppData\Roaming\.minecraft\LabyMod\accounts.json",
     "C:\Users\$username\AppData\Roaming\.cosmic",
     "C:\Users\$username\AppData\Local\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState",
-    "C:\Users\$username\AppData\Local\Packages\Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe\LocalState",
-    "C:\Windows\Prefetch\JAVAW.EXE-*.pf",
+    "C:\Users\$username\AppData\Local\Packages\Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe\LocalState"
 )
 
 $deletedCount = 0
@@ -62,6 +61,25 @@ $notFoundCount = 0
 
 Write-Host "deleting account instances" -ForegroundColor Green
 Write-Host ""
+
+$prefetchPaths = @(
+    "C:\Windows\Prefetch\JAVAW.EXE-*.pf",
+)
+
+foreach ($pattern in $prefetchPaths) {
+    $files = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+    foreach ($file in $files) {
+        try {
+            Remove-Item -Path $file.FullName -Force -ErrorAction Stop
+            Write-Host "Deleted: $($file.FullName)" -ForegroundColor Green
+            $deletedCount++
+        }
+        catch {
+            Write-Host "  Error deleting $($file.FullName) : $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+}
+
 foreach ($path in $pathsToClean) {
     if (Test-Path $path) {
         try {
@@ -77,7 +95,6 @@ foreach ($path in $pathsToClean) {
         $notFoundCount++
     }
 }
-
 $xboxPackages = Get-ChildItem "C:\Users\$username\AppData\Local\Packages\" -Filter "Microsoft.XboxApp*" -ErrorAction SilentlyContinue
 
 if ($xboxPackages) {
@@ -119,7 +136,7 @@ Write-Host "Finished" -ForegroundColor Cyan
 Write-Host "folders and locations deleted: $deletedCount" -ForegroundColor Green
 Write-Host ""
 
-$response = Read-Host "Would you like to clear the USN Journal? (recommended) (yes/no)"
+$response = Read-Host "Would you like to clear the USN Journal? (recommended to clear evidence of deletions) (yes/no)"
 
 if ($response -eq "yes" -or $response -eq "y") {
     Write-Host ""
@@ -138,7 +155,7 @@ else {
 
 Write-Host ""
 
-$eventResponse = Read-Host "Would you like to clear Windows Event Logs? (recommended) (yes/no)"
+$eventResponse = Read-Host "Would you like to clear Windows Event Logs? (Recommended to bypass powershell logs) (yes/no)"
 
 if ($eventResponse -eq "yes" -or $eventResponse -eq "y") {
     Write-Host ""
@@ -167,7 +184,7 @@ else {
 }
 
 Write-Host ""
-$dnsResponse = Read-Host "Would you like to flush DNS cache? (yes/no)"
+$dnsResponse = Read-Host "Would you like to flush DNS cache? (wont matter most of the time) (yes/no)"
 
 if ($dnsResponse -eq "yes" -or $dnsResponse -eq "y") {
     Write-Host ""
