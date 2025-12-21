@@ -63,7 +63,7 @@ Write-Host "deleting account instances" -ForegroundColor Green
 Write-Host ""
 
 $prefetchPaths = @(
-    "C:\Windows\Prefetch\JAVAW.EXE-*.pf",
+    "C:\Windows\Prefetch\JAVAW.EXE-*.pf"
 )
 
 foreach ($pattern in $prefetchPaths) {
