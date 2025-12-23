@@ -4,7 +4,8 @@ $paths = @(
     "$env:USERPROFILE\AppData\.lunarclient",
     "$env:USERPROFILE\AppData\.minecraft", 
     "$env:USERPROFILE\AppData\modrinth\",
-    "$env:USERPROFILE\AppData\Roaming\Badlion Client\Data",
+    "$env:USERPROFILE\AppData\Roaming\Badlion Client\",
+    "$env:USERPROFILE\Downloads",
     "C:\Windows\System32"   
 )
 $strings = @(
