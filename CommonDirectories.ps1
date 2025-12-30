@@ -1,25 +1,19 @@
 Write-Host "`
-⠀⠀⠀⠀⣶⣄⠀⠀⠀⠀⠀⠀⢀⣶⡆⠀⠀⠀
-⠀⠀⠀⢸⣿⣿⡆⠀⠀⠀⠀⢀⣾⣿⡇⠀⠀⠀
-⠀⠀⠀⠘⣿⣿⣿⠀⠀⠀⠀⢸⣿⣿⡇⠀⠀⠀
-⠀⠀⠀⠀⢿⣿⣿⣤⣤⣤⣤⣼⣿⡿⠃⠀⠀⠀
-⠀⠀⠀⢠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠀⠀⠀
-⠀⠀⢠⣿⡃⣦⢹⣿⣟⣙⣿⣿⠰⡀⣿⣇⠀⠀
-⠠⠬⣿⣿⣷⣶⣿⣿⣿⣿⣿⣿⣷⣾⣿⣿⡭⠤      
-⠀⣼⣿⣿⣿⣿⠿⠛⠛⠛⠛⠻⢿⣿⣿⣿⣿⡀
-⢰⣿⣿⣿⠋⠀⠀⠀⢀⣀⠀⠀⠀⠉⢿⣿⣿⣧
-⢸⣿⣿⠃⠜⠛⠂⠀⠋⠉⠃⠐⠛⠻⠄⢿⣿⣿
-⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿
-⠘⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⡏
-⠀⠈⠻⠿⣤⣀⡀⠀⠀⠀⠀⠀⣀⣠⠾⠟⠋⠀            made with love by lily<3
+           w   8          
+██████╗  █████╗ ████████╗██╗  ██╗███████╗
+██╔══██╗██╔══██╗╚══██╔══╝██║  ██║██╔════╝
+██████╔╝███████║   ██║   ███████║███████╗
+██╔═══╝ ██╔══██║   ██║   ██╔══██║╚════██║
+██║     ██║  ██║   ██║   ██║  ██║███████║
+╚═╝     ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝  made with love by lily<3
 `n" -ForegroundColor Cyan
-
 
 $directories = @(
     "$env:windir\System32",
     "$env:windir\SysWOW64", 
     "$env:USERPROFILE\AppData\Local\Temp"
 )
+
 $outputDir = "C:\Screenshare"
 $outputFile = "$outputDir\paths.txt"
 
@@ -27,45 +21,87 @@ if (-not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 }
 
-$microsoftKeywords = @(
-    "Microsoft", 
-    "Windows", 
-    "Microsoft Corporation",
-    "Windows Publisher",
-    "Microsoft Windows"
-)
+$microsoftRegex = [regex]::new('Microsoft|Windows|Redmond', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
+$trustedRegex = [regex]::new('NVIDIA|Intel|AMD|Realtek|VIA|Qualcomm', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
+$knownCheatRegex = [regex]::new('manthe', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
-$microsoftPattern = ($microsoftKeywords | ForEach-Object { [regex]::Escape($_) }) -join '|'
-$microsoftRegex = [regex]::new($microsoftPattern, [System.Text.RegularExpressions.RegexOptions]::Compiled)
+$signatureCache = @{}
 
-function Test-MicrosoftFile {
+function Test-ShouldIncludeFile {
     param([System.IO.FileInfo]$FileInfo)
     
     try {
         $fileName = $FileInfo.Name
-        if ($fileName -like "*.mui" -or $fileName -like "*Microsoft*" -or $fileName -like "*Windows*") {
-            $versionInfo = $FileInfo.VersionInfo
-            if ($versionInfo.CompanyName -or $versionInfo.ProductName) {
-                if ($microsoftRegex.IsMatch($versionInfo.CompanyName) -or 
-                    $microsoftRegex.IsMatch($versionInfo.ProductName)) {
+        
+        if ($fileName -like "*.mui") {
+            return $false
+        }
+        
+
+        $nonExecutableExtensions = @('.evtx', '.etl', '.dat', '.db', '.log', '.log1', '.log2', 
+                                      '.regtrans-ms', '.blf', '.cab', '.rtf', '.inf', '.txt',
+                                      '.tmp', '.bin', '.bak', '.btx', '.btr', '.wal', '.xml')
+        $extension = $FileInfo.Extension.ToLower()
+        if ($nonExecutableExtensions -contains $extension) {
+            return $false
+        }
+
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($FileInfo.FullName)
+            if ($bytes.Length -ge 2) {
+                if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+                    return $false
+                }
+            } else {
+                return $false
+            }
+        }
+        catch {
+            return $false
+        }
+
+        if ($fileName -match '^(microsoft|windows|ms)') {
+            return $false
+        }
+
+        try {
+            $filePath = $FileInfo.FullName
+
+            if ($signatureCache.ContainsKey($filePath)) {
+                return $signatureCache[$filePath]
+            }
+            
+            $signature = Get-AuthenticodeSignature -FilePath $filePath -ErrorAction Stop
+            
+            if ($signature.Status -eq "Valid" -and $signature.SignerCertificate) {
+                $subject = $signature.SignerCertificate.Subject
+                
+                if ($knownCheatRegex.IsMatch($subject)) {
+                    $signatureCache[$filePath] = $true
                     return $true
+                }
+
+                if ($microsoftRegex.IsMatch($subject) -or $trustedRegex.IsMatch($subject)) {
+                    $signatureCache[$filePath] = $false
+                    return $false
                 }
             }
         }
-        
-        
+        catch {
+        }
+
         try {
-            $signature = Get-AuthenticodeSignature -FilePath $FileInfo.FullName -ErrorAction Stop
-            if ($signature.Status -eq "Valid" -and $signature.SignerCertificate) {
-                if ($microsoftRegex.IsMatch($signature.SignerCertificate.Subject)) {
-                    return $true
+            $versionInfo = $FileInfo.VersionInfo
+            if ($versionInfo.CompanyName) {
+                if ($microsoftRegex.IsMatch($versionInfo.CompanyName) -or $trustedRegex.IsMatch($versionInfo.CompanyName)) {
+                    return $false
                 }
             }
         }
         catch {
         }
         
-        return $false
+        return $true
     }
     catch {
         return $false
@@ -76,44 +112,42 @@ if (Test-Path $outputFile) {
     Remove-Item $outputFile -Force
 }
 
-Write-Host "Scanning directories for large non-Microsoft files" -ForegroundColor Green
-Write-Host "This may take up to a minutee" -ForegroundColor Yellow
-Write-Host "Output: $outputFile" -ForegroundColor Cyan
+Write-Host "Scanning for non-Microsoft files" -ForegroundColor Green
+Write-Host ""
+Write-Host ""
+Write-Host "Output: $outputFile`n" -ForegroundColor Cyan
 
 $startTime = Get-Date
 $fileCount = 0
 $totalFilesChecked = 0
-$streamWriter = [System.IO.StreamWriter]::new($outputFile, $false, [System.Text.UTF8Encoding]::new($false))
+
+
+$stringBuilder = [System.Text.StringBuilder]::new()
+
 foreach ($directory in $directories) {
     if (-not (Test-Path $directory)) {
         Write-Host "Directory not found: $directory" -ForegroundColor Red
         continue
     }
     
-    Write-Host "Processing: $directory" -ForegroundColor Yellow
+    Write-Host "Scanning: $directory" -ForegroundColor Yellow
     $dirStartTime = Get-Date
     $dirFileCount = 0
     
     try {
-        $allFiles = [System.IO.Directory]::EnumerateFiles($directory, "*", [System.IO.SearchOption]::AllDirectories)
+        $files = Get-ChildItem -Path $directory -File -Recurse -Force -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Length -ge 1MB }
         
-        foreach ($filePath in $allFiles) {
+        foreach ($fileInfo in $files) {
             try {
-                $fileInfo = [System.IO.FileInfo]::new($filePath)
-                
-                if ($fileInfo.Length -lt 1MB) {
-                    continue
-                }
-                
                 $totalFilesChecked++
-                
-                
+
                 if ($totalFilesChecked % 500 -eq 0) {
-                    Write-Host "  Processed $totalFilesChecked files" -ForegroundColor Gray
+                    Write-Host "  Checked: $totalFilesChecked | Found: $fileCount" -ForegroundColor Gray
                 }
                 
-                if (-not (Test-MicrosoftFile -FileInfo $fileInfo)) {
-                    $streamWriter.WriteLine($fileInfo.FullName)
+                if (Test-ShouldIncludeFile -FileInfo $fileInfo) {
+                    [void]$stringBuilder.AppendLine($fileInfo.FullName)
                     $fileCount++
                     $dirFileCount++
                 }
@@ -124,63 +158,69 @@ foreach ($directory in $directories) {
         }
         
         $dirTime = (Get-Date) - $dirStartTime
-        Write-Host "  Found $dirFileCount files in $([math]::Round($dirTime.TotalSeconds, 1)) seconds" -ForegroundColor Green
+        Write-Host "  Found: $dirFileCount files in $([math]::Round($dirTime.TotalSeconds, 1))s" -ForegroundColor Green
     }
     catch {
-        Write-Host "  Error processing directory: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
-$streamWriter.Close()
+
+[System.IO.File]::WriteAllText($outputFile, $stringBuilder.ToString(), [System.Text.UTF8Encoding]::new($false))
 
 $totalTime = (Get-Date) - $startTime
 
-Write-Host "`nScan completed in $([math]::Round($totalTime.TotalMinutes, 1)) minutes!" -ForegroundColor Green
-Write-Host "Total files checked: $totalFilesChecked" -ForegroundColor White
-Write-Host "Large non-Microsoft files found: $fileCount" -ForegroundColor Green
-Write-Host "Output: $outputFile" -ForegroundColor Cyan
+Write-Host "`nScan Complete c:" -ForegroundColor Green
+Write-Host "Time: $([math]::Round($totalTime.TotalMinutes, 1)) minutes" -ForegroundColor White
+Write-Host "Files checked: $totalFilesChecked" -ForegroundColor White
+Write-Host "Non-Microsoft files found: $fileCount" -ForegroundColor Cyan
+Write-Host "Output: $outputFile`n" -ForegroundColor Cyan
 
 if (Test-Path $outputFile) {
     $lineCount = (Get-Content $outputFile | Measure-Object).Count
-    Write-Host "Lines in output file: $lineCount" -ForegroundColor White
+    Write-Host "Paths written: $lineCount" -ForegroundColor White
     
-    $validPaths = 0
-    $samplePaths = Get-Content $outputFile | Select-Object -First 10
-    Write-Host "`nTesting first 10 paths:" -ForegroundColor Yellow
-    foreach ($path in $samplePaths) {
-        if (Test-Path $path) {
-            Write-Host "  VALID: $path" -ForegroundColor Green
-            $validPaths++
-        } else {
-            Write-Host "  INVALID: $path" -ForegroundColor Red
-        }
-    }
-    
-    if ($validPaths -eq $samplePaths.Count) {
-        Write-Host "All sample paths are valid!??" -ForegroundColor Green
-    } else {
-        Write-Host "Some paths appear to be invalid. This could be due to:" -ForegroundColor Yellow
-        Write-Host "  - Files being deleted after scanning" -ForegroundColor Yellow
-        Write-Host "  - Permission issues" -ForegroundColor Yellow
-        Write-Host "  - Temporary files that no longer exist" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "No output file was created." -ForegroundColor Red
-}
-if ((Test-Path $outputFile) -and $fileCount -gt 0) {
-    $totalSize = 0
-    $collectedFiles = Get-Content $outputFile
-    foreach ($filePath in $collectedFiles) {
-        if (Test-Path $filePath) {
-            $fileItem = Get-Item $filePath -ErrorAction SilentlyContinue
-            if ($fileItem) {
-                $totalSize += $fileItem.Length
+    if ($fileCount -gt 0) {
+        $samplePaths = Get-Content $outputFile | Select-Object -First 5
+        
+        Write-Host "`nSample paths:" -ForegroundColor Yellow
+        foreach ($path in $samplePaths) {
+            if (Test-Path $path) {
+                $fileItem = Get-Item $path -ErrorAction SilentlyContinue
+                if ($fileItem) {
+                    $sizeMB = [math]::Round($fileItem.Length / 1MB, 2)
+
+                    try {
+                        $sig = Get-AuthenticodeSignature -FilePath $path -ErrorAction SilentlyContinue
+                        if ($sig -and $sig.SignerCertificate -and ($sig.SignerCertificate.Subject -match 'manthe')) {
+                            Write-Host "  [FLAGGED CHEAT] $path ($sizeMB MB)" -ForegroundColor Red
+                        } else {
+                            Write-Host "  $path ($sizeMB MB)" -ForegroundColor Green
+                        }
+                    }
+                    catch {
+                        Write-Host "  $path ($sizeMB MB)" -ForegroundColor Green
+                    }
+                }
             }
         }
+
+        $totalSize = 0
+        $collectedFiles = Get-Content $outputFile
+        foreach ($filePath in $collectedFiles) {
+            if (Test-Path $filePath) {
+                $fileItem = Get-Item $filePath -ErrorAction SilentlyContinue
+                if ($fileItem) {
+                    $totalSize += $fileItem.Length
+                }
+            }
+        }
+        
+        $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
+        Write-Host "`nTotal size: $totalSizeMB MB" -ForegroundColor Cyan
     }
-    $totalSizeMB = $totalSize / 1MB
-    Write-Host "Total size: $([math]::Round($totalSizeMB, 2)) MB" -ForegroundColor Cyan
 } else {
-    Write-Host "No files meeting criteria were found." -ForegroundColor Yellow
+    Write-Host "No files found" -ForegroundColor Yellow
 }
 
-Write-host "Scan the paths with paths parser n verify cheats manually, hit up @praiselily if u find any issues" -ForgroundColor Cyan
+Write-Host "`nRun paths parser with YARA rules on '$outputFile'" -ForegroundColor Green
+Write-Host "Hit up @praiselily if you find any issues" -ForegroundColor Cyan
