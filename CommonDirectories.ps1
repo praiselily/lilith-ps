@@ -22,7 +22,7 @@ if (-not (Test-Path $outputDir)) {
 }
 
 $microsoftRegex = [regex]::new('Microsoft|Windows|Redmond', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
-$trustedRegex = [regex]::new('NVIDIA|Intel|AMD|Realtek|VIA|Qualcomm', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
+$trustedRegex = [regex]::new('NVIDIA|Intel|AMD|Realtek|VIA|Qualcomm|Razer|Lenovo|Dolby|HP Inc|Dell Inc|ASUS|Acer|Logitech|Corsair', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
 $knownCheatRegex = [regex]::new('manthe', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
 $knownGoodFiles = @{
@@ -57,7 +57,7 @@ function Test-ShouldIncludeFile {
         if ($extension -ne "") {
             $nonExecutableExtensions = @('.evtx', '.etl', '.dat', '.db', '.log', '.log1', '.log2', 
                                           '.regtrans-ms', '.blf', '.cab', '.rtf', '.inf', '.txt',
-                                          '.tmp', '.bin', '.bak', '.btx', '.btr', '.wal', '.xml')
+                                          '.tmp', '.bin', '.bak', '.btx', '.btr', '.wal', '.xml', '.db-wal')
             if ($nonExecutableExtensions -contains $extension) {
                 return $false
             }
@@ -69,15 +69,12 @@ function Test-ShouldIncludeFile {
             $bytesRead = $stream.Read($buffer, 0, 2)
             $stream.Close()
             
-            if ($bytesRead -ge 2) {
-                if ($buffer[0] -ne 0x4D -or $buffer[1] -ne 0x5A) {
-                    return $false
-                }
-            } else {
+            if ($bytesRead -lt 2 -or $buffer[0] -ne 0x4D -or $buffer[1] -ne 0x5A) {
                 return $false
             }
         }
         catch {
+            return $false
         }
 
         if ($fileName -match '^(microsoft|windows|ms)') {
