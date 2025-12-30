@@ -25,6 +25,21 @@ $microsoftRegex = [regex]::new('Microsoft|Windows|Redmond', [System.Text.Regular
 $trustedRegex = [regex]::new('NVIDIA|Intel|AMD|Realtek|VIA|Qualcomm', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
 $knownCheatRegex = [regex]::new('manthe', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
+$knownGoodFiles = @{
+    'ntoskrnl.exe' = $true
+    'kernel32.dll' = $true
+    'user32.dll' = $true
+    'advapi32.dll' = $true
+    'shell32.dll' = $true
+    'explorer.exe' = $true
+    'svchost.exe' = $true
+    'services.exe' = $true
+    'lsass.exe' = $true
+    'csrss.exe' = $true
+    'winlogon.exe' = $true
+    'dwm.exe' = $true
+}
+
 $signatureCache = @{}
 
 function Test-ShouldIncludeFile {
@@ -37,19 +52,25 @@ function Test-ShouldIncludeFile {
             return $false
         }
         
-
-        $nonExecutableExtensions = @('.evtx', '.etl', '.dat', '.db', '.log', '.log1', '.log2', 
-                                      '.regtrans-ms', '.blf', '.cab', '.rtf', '.inf', '.txt',
-                                      '.tmp', '.bin', '.bak', '.btx', '.btr', '.wal', '.xml')
         $extension = $FileInfo.Extension.ToLower()
-        if ($nonExecutableExtensions -contains $extension) {
-            return $false
+        
+        if ($extension -ne "") {
+            $nonExecutableExtensions = @('.evtx', '.etl', '.dat', '.db', '.log', '.log1', '.log2', 
+                                          '.regtrans-ms', '.blf', '.cab', '.rtf', '.inf', '.txt',
+                                          '.tmp', '.bin', '.bak', '.btx', '.btr', '.wal', '.xml')
+            if ($nonExecutableExtensions -contains $extension) {
+                return $false
+            }
         }
 
         try {
-            $bytes = [System.IO.File]::ReadAllBytes($FileInfo.FullName)
-            if ($bytes.Length -ge 2) {
-                if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            $stream = [System.IO.File]::OpenRead($FileInfo.FullName)
+            $buffer = New-Object byte[] 2
+            $bytesRead = $stream.Read($buffer, 0, 2)
+            $stream.Close()
+            
+            if ($bytesRead -ge 2) {
+                if ($buffer[0] -ne 0x4D -or $buffer[1] -ne 0x5A) {
                     return $false
                 }
             } else {
@@ -57,10 +78,13 @@ function Test-ShouldIncludeFile {
             }
         }
         catch {
-            return $false
         }
 
         if ($fileName -match '^(microsoft|windows|ms)') {
+            return $false
+        }
+        
+        if ($knownGoodFiles.ContainsKey($fileName.ToLower())) {
             return $false
         }
 
@@ -121,7 +145,6 @@ $startTime = Get-Date
 $fileCount = 0
 $totalFilesChecked = 0
 
-
 $stringBuilder = [System.Text.StringBuilder]::new()
 
 foreach ($directory in $directories) {
@@ -136,7 +159,7 @@ foreach ($directory in $directories) {
     
     try {
         $files = Get-ChildItem -Path $directory -File -Recurse -Force -ErrorAction SilentlyContinue |
-                 Where-Object { $_.Length -ge 1MB }
+                 Where-Object { $_.Length -ge 300KB }
         
         foreach ($fileInfo in $files) {
             try {
