@@ -11,7 +11,7 @@ Write-Host "`
 ⢸⣿⣿⠃⠜⠛⠂⠀⠋⠉⠃⠐⠛⠻⠄⢿⣿⣿
 ⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿
 ⠘⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⡏
-⠀⠈⠻⠿⣤⣀⡀⠀⠀⠀⠀⠀⣀⣠⠾⠟⠋⠀            made with love by lily<3
+⠀⠈⠻⠿⣤⣀⡀⠀⠀⠀⠀⠀⣀⣠⠾⠟⠋⠀            made with love by lily<3 - credits to Zedoon 
 `n" -ForegroundColor Cyan
 
 Add-Type -TypeDefinition @"
@@ -401,7 +401,7 @@ try {
     $javaPrefetchFiles = Get-ChildItem -Path $prefetchFolder -Filter "JAVA*.EXE-*.pf" -ErrorAction SilentlyContinue
 
     if ($javaPrefetchFiles.Count -eq 0) {
-        Write-Host "No JavaW prefetch files found" -ForegroundColor Yellow
+        Write-Host "No Javaw prefetch files found" -ForegroundColor Yellow
         Read-Host "Press Enter to exit"
         exit
     }
