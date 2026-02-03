@@ -1,18 +1,14 @@
 Write-Host @"
-___       ___  ___       ___  _________  ___  ___     
-|\  \     |\  \|\  \     |\  \|\___   ___\\  \|\  \    
-\ \  \    \ \  \ \  \    \ \  \|___ \  \_\ \  \\\  \   
- \ \  \    \ \  \ \  \    \ \  \   \ \  \ \ \   __  \  
-  \ \  \____\ \  \ \  \____\ \  \   \ \  \ \ \  \ \  \ 
-   \ \_______\ \__\ \_______\ \__\   \ \__\ \ \__\ \__\
-    \|_______|\|__|\|_______|\|__|    \|__|  \|__|\|__|
- Made with love by Lily<3                                                                                                             
-"@ -ForegroundColor Cyan                                               
+ ██████╗ ██████╗ ██╗     ██╗     ███████╗ ██████╗████████╗ ██████╗ ██████╗ 
+██╔════╝██╔═══██╗██║     ██║     ██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
+██║     ██║   ██║██║     ██║     █████╗  ██║        ██║   ██║   ██║██████╔╝
+██║     ██║   ██║██║     ██║     ██╔══╝  ██║        ██║   ██║   ██║██╔══██╗
+╚██████╗╚██████╔╝███████╗███████╗███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
+ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
+"@ -ForegroundColor Magenta
 
-Write-Host @"
-WARNING: MAKE SURE U HAVE THE SUSPECTS CONSENT BEFORE RUNNING, 
-SCRIPT WILL ADD C:\SCREENSHARE TO ANTIVIRUS EXCLUSIONS. 
-"@ -ForegroundColor Red
+Write-Host "                          Made with love by Lily<3" -ForegroundColor Cyan
+Write-Host ""
 
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -174,7 +170,8 @@ $zimmermanTools = @(
     @{ Name="PECmd"; Url="https://download.ericzimmermanstools.com/net9/PECmd.zip"; File="PECmd.zip" },
     @{ Name="SrumECmd"; Url="https://download.ericzimmermanstools.com/net9/SrumECmd.zip"; File="SrumECmd.zip" },
     @{ Name="TimelineExplorer"; Url="https://download.ericzimmermanstools.com/net9/TimelineExplorer.zip"; File="TimelineExplorer.zip" },
-    @{ Name="RegisryExplorer"; Url="https://download.ericzimmermanstools.com/net9/RegistryExplorer.zip"; File="RegistryExplorer.zip.zip" }
+    @{ Name="RegistryExplorer"; Url="https://download.ericzimmermanstools.com/net9/RegistryExplorer.zip"; File="RegistryExplorer.zip" },
+    @{ Name="MFTECmd"; Url="https://download.ericzimmermanstools.com/net9/MFTECmd.zip"; File="MFTECmd.zip" }
 )
 
 $nirsoftTools = @(
@@ -186,10 +183,22 @@ $nirsoftTools = @(
     @{ Name="PreviousFilesRecovery"; Url="https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip"; File="previousfilesrecovery-x64.zip" }
 )
 
+$myTools = @(
+    @{ Name="AltDetector"; Url="https://github.com/praiselily/AltDetector/releases/download/Detector/AltDetector.exe"; File="AltDetector.exe" },
+    @{ Name="FakerFinder"; Url="https://github.com/praiselily/WeHateFakers/releases/download/Screenshare/FakerFinder.jar"; File="FakerFinder.jar" },
+    @{ Name="HardlinkFinder"; Url="https://github.com/praiselily/HardlinkFinder/releases/download/Tools/hardlink.exe"; File="hardlink.exe" }
+)
+
 $otherTools = @(
     @{ Name="System Informer"; Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="systeminformer-build-canary-setup.exe" },
     @{ Name="Everything Search"; Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="Everything-1.4.1.1029.x86-Setup.exe" },
-    @{ Name="FTK Imager"; Url="https://d1kpmuwb7gvu1i.cloudfront.net/AccessData_FTK_Imager_4.7.1.exe"; File="AccessData_FTK_Imager_4.7.1.exe" }
+    @{ Name="FTK Imager"; Url="https://www.mediafire.com/file/qqhbjhop1zgufsa/Exterro_FTK_Imager_%28x64%29-4.7.3.81.exe/file"; File="Exterro_FTK_Imager_x64-4.7.3.81.exe" }
+    @{ Name="InjGen"; Url="https://github.com/NotRequiem/InjGen/releases/download/v2.0/InjGen.exe"; File="InjGen.exe" },
+    @{ Name="PrefetchView++"; Url="https://github.com/Orbdiff/PrefetchView/releases/download/v1.5.4/PrefetchView++.exe"; File="PrefetchView++.exe" },
+    @{ Name="Velociraptor"; Url="https://github.com/Velocidex/velociraptor/releases/download/v0.6.6-1/velociraptor-v0.6.6-3-windows-386.exe"; File="velociraptor-v0.6.6-3-windows-386.exe" },
+    @{ Name="Recaf"; Url="https://github.com/Col-E/Recaf/releases/download/4.0.0-alpha/recaf-4x-alpha-win-86x64.jar"; File="recaf-4x-alpha-win-86x64.jar" },
+    @{ Name="Magnet RESPONSE"; Url="https://download1523.mediafire.com/gk67r6nckolg0pVDmP5hLkBI3VjM7Af0YDg8r64Ud95cg71fsgx30IIZdel2UnxZwffrJGajQqcaacuX92JTv2k9t0QhD0Q4QoMj_6KwY048nunCaPizYhnz2kjBXikuFd3nZcnceD2SJMOUOwJATJ-zBD7RIK-eXpcSI8L1JMUYXA/lxnu4z9sqzz63lc/MRCv120.exe"; File="MRCv120.exe" },
+    @{ Name="Hayabusa"; Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa-3.6.0-win-x64.zip" }
 )
 
 
@@ -213,17 +222,15 @@ if ($response -match '^[Yy]') {
     Download-Tools -Tools $nirsoftTools -CategoryName "Nirsoft"
 }
 
-Write-Host "`nNote: hayabusa might flag as a virus (its very safe n open source)" -ForegroundColor Yellow
-$response = Read-Host "Do you want to download Hayabusa? (Y/N)"
+$response = Read-Host "`nDo you want to download My tools? (Y/N)"
 if ($response -match '^[Yy]') {
-    Download-File -Url "https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip" -FileName "hayabusa-3.6.0-win-x64.zip" -ToolName "Hayabusa"
+    Download-Tools -Tools $myTools -CategoryName "My"
 }
 
-$response = Read-Host "`nDo you want to download other common tools (i couldnt think of a category)? (Y/N)"
+$response = Read-Host "`nDo you want to download other common tools? (Y/N)"
 if ($response -match '^[Yy]') {
     Download-Tools -Tools $otherTools -CategoryName "Other Common"
 }
 
 Write-Host "`nHit up @praiselily if u got ideas for tools to add" -ForegroundColor Cyan
 Write-Host "Downloads are located in: $DownloadPath" -ForegroundColor Cyan
-
