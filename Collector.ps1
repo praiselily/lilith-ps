@@ -201,35 +201,54 @@ $otherTools = @(
     @{ Name="Hayabusa"; Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa-3.6.0-win-x64.zip" }
 )
 
+$installAllResponse = Read-Host "`nDo you want to download ALL tool categories? (Y/N)"
+$installAll = $installAllResponse -match '^[Yy]'
 
-$response = Read-Host "`nDo you want to download Spokwn's tools? (Y/N)"
-if ($response -match '^[Yy]') {
+if ($installAll) {
+    Write-Host "`nDownloading all tool categories..." -ForegroundColor Green
     Download-Tools -Tools $spowksucksasscheeks -CategoryName "Spokwn's"
-}
-
-$response = Read-Host "`nDo you want to download Zimmerman's tools? (Y/N)"
-if ($response -match '^[Yy]') {
     Download-Tools -Tools $zimmermanTools -CategoryName "Zimmerman's"
     
     $runtimeResponse = Read-Host "`nWould you like to install the .NET Runtime (required for zimmerman) (Y/N)"
     if ($runtimeResponse -match '^[Yy]') {
         Download-File -Url "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.306/dotnet-sdk-9.0.306-win-x64.exe" -FileName "dotnet-sdk-9.0.306-win-x64.exe" -ToolName ".NET Runtime"
     }
-}
-
-$response = Read-Host "`nDo you want to download Nirsoft tools? (Y/N)"
-if ($response -match '^[Yy]') {
+    
     Download-Tools -Tools $nirsoftTools -CategoryName "Nirsoft"
-}
-
-$response = Read-Host "`nDo you want to download My tools? (Y/N)"
-if ($response -match '^[Yy]') {
     Download-Tools -Tools $myTools -CategoryName "My"
-}
-
-$response = Read-Host "`nDo you want to download other common tools? (Y/N)"
-if ($response -match '^[Yy]') {
     Download-Tools -Tools $otherTools -CategoryName "Other Common"
+} else {
+    Write-Host "`nSelect which categories to download:" -ForegroundColor Yellow
+    
+    $response = Read-Host "`nDo you want to download Spokwn's tools? (Y/N)"
+    if ($response -match '^[Yy]') {
+        Download-Tools -Tools $spowksucksasscheeks -CategoryName "Spokwn's"
+    }
+
+    $response = Read-Host "`nDo you want to download Zimmerman's tools? (Y/N)"
+    if ($response -match '^[Yy]') {
+        Download-Tools -Tools $zimmermanTools -CategoryName "Zimmerman's"
+        
+        $runtimeResponse = Read-Host "`nWould you like to install the .NET Runtime (required for zimmerman) (Y/N)"
+        if ($runtimeResponse -match '^[Yy]') {
+            Download-File -Url "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.306/dotnet-sdk-9.0.306-win-x64.exe" -FileName "dotnet-sdk-9.0.306-win-x64.exe" -ToolName ".NET Runtime"
+        }
+    }
+
+    $response = Read-Host "`nDo you want to download Nirsoft tools? (Y/N)"
+    if ($response -match '^[Yy]') {
+        Download-Tools -Tools $nirsoftTools -CategoryName "Nirsoft"
+    }
+
+    $response = Read-Host "`nDo you want to download My tools? (Y/N)"
+    if ($response -match '^[Yy]') {
+        Download-Tools -Tools $myTools -CategoryName "My"
+    }
+
+    $response = Read-Host "`nDo you want to download other common tools? (Y/N)"
+    if ($response -match '^[Yy]') {
+        Download-Tools -Tools $otherTools -CategoryName "Other Common"
+    }
 }
 
 Write-Host "`nHit up @praiselily if u got ideas for tools to add" -ForegroundColor Cyan
