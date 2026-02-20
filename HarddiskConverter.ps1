@@ -14,7 +14,7 @@ public static class DeviceResolver
 }
 '@ -ErrorAction Stop
 
- map
+# map
 function Build-DeviceMap {
     $map = @{}
     foreach ($letter in [char[]](65..90 | ForEach-Object { [char]$_ })) {
