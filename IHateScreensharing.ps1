@@ -8,8 +8,8 @@ $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     if ($PSCommandPath) {
-        Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden `
-            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',"`"$PSCommandPath`"") | Out-Null
+        Start-Process -FilePath 'powershell.exe' -Verb RunAs `
+            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-NoExit','-File',"`"$PSCommandPath`"") | Out-Null
     }
     return
 }
@@ -139,3 +139,5 @@ foreach ($k in 'HKLM:\SOFTWARE\Microsoft\Command Processor',
                 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Command Processor') {
     Remove-ItemProperty $k -Name 'AutoRun' -Force
 }
+
+Write-Host 'made with love by @praiselily' -ForegroundColor Blue
